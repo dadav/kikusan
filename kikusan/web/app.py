@@ -1,11 +1,13 @@
 """FastAPI web application for Kikusan."""
 
+import asyncio
+import json
 import urllib.parse
 from pathlib import Path
 
 import yt_dlp
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -13,9 +15,13 @@ from pydantic import BaseModel
 from kikusan.config import get_config
 from kikusan.download import download
 from kikusan.playlist import add_to_m3u
+from kikusan.queue import QueueManager
 from kikusan.search import search
 
 app = FastAPI(title="Kikusan", description="Search and download music from YouTube Music")
+
+# Global queue manager
+queue_manager: QueueManager | None = None
 
 # Setup templates and static files
 templates_dir = Path(__file__).parent / "templates"
@@ -23,6 +29,21 @@ static_dir = Path(__file__).parent / "static"
 
 templates = Jinja2Templates(directory=str(templates_dir))
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize queue manager on startup."""
+    global queue_manager
+    queue_manager = QueueManager()
+    await queue_manager.start()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop queue manager on shutdown."""
+    if queue_manager:
+        await queue_manager.stop()
 
 
 class DownloadRequest(BaseModel):
@@ -203,3 +224,116 @@ async def get_stream_url(video_id: str):
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get stream URL: {str(e)}")
+
+
+# Queue endpoints
+
+
+class QueueAddRequest(BaseModel):
+    """Request to add a job to the queue."""
+
+    video_id: str
+    title: str
+    artist: str
+    audio_format: str = "opus"
+
+
+class QueueAddResponse(BaseModel):
+    """Response after adding a job."""
+
+    job_id: str
+    status: str
+
+
+@app.post("/api/queue/add", response_model=QueueAddResponse)
+async def add_to_queue(request: QueueAddRequest):
+    """Add a download job to the queue."""
+    if not queue_manager:
+        raise HTTPException(status_code=500, detail="Queue manager not initialized")
+
+    # Validate format
+    valid_formats = ["opus", "mp3", "flac"]
+    audio_format = request.audio_format.lower()
+    if audio_format not in valid_formats:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid format. Must be one of: {', '.join(valid_formats)}"
+        )
+
+    job_id = await queue_manager.add_job(
+        video_id=request.video_id,
+        title=request.title,
+        artist=request.artist,
+        format=audio_format,
+    )
+
+    return QueueAddResponse(job_id=job_id, status="queued")
+
+
+@app.get("/api/queue/jobs")
+async def list_queue_jobs():
+    """List all jobs in the queue."""
+    if not queue_manager:
+        raise HTTPException(status_code=500, detail="Queue manager not initialized")
+
+    jobs = queue_manager.list_jobs()
+    return {"jobs": [job.to_dict() for job in jobs]}
+
+
+@app.delete("/api/queue/{job_id}")
+async def remove_queue_job(job_id: str):
+    """Remove or clear a job from the queue."""
+    if not queue_manager:
+        raise HTTPException(status_code=500, detail="Queue manager not initialized")
+
+    success = await queue_manager.remove_job(job_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Job not found or cannot be removed")
+
+    return {"success": True}
+
+
+@app.get("/api/queue/stream")
+async def stream_queue_updates(request: Request):
+    """Server-Sent Events endpoint for real-time queue updates."""
+    if not queue_manager:
+        raise HTTPException(status_code=500, detail="Queue manager not initialized")
+
+    async def event_generator():
+        """Generate SSE events for queue updates."""
+        try:
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    break
+
+                # Get current jobs
+                jobs = queue_manager.list_jobs()
+                jobs_data = [job.to_dict() for job in jobs]
+
+                # Send update via SSE
+                yield f"data: {json.dumps(jobs_data)}\n\n"
+
+                # Wait before next update
+                await asyncio.sleep(0.5)
+
+        except asyncio.CancelledError:
+            pass
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/queue/stats")
+async def get_queue_stats():
+    """Get queue statistics."""
+    if not queue_manager:
+        raise HTTPException(status_code=500, detail="Queue manager not initialized")
+
+    return queue_manager.get_stats()

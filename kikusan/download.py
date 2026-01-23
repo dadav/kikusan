@@ -11,9 +11,14 @@ from kikusan.lyrics import get_lyrics, save_lyrics
 logger = logging.getLogger(__name__)
 
 
-def _get_ydl_opts(output_dir: Path, audio_format: str, filename_template: str) -> dict:
+def _get_ydl_opts(
+    output_dir: Path,
+    audio_format: str,
+    filename_template: str,
+    progress_callback: callable = None,
+) -> dict:
     """Get common yt-dlp options."""
-    return {
+    opts = {
         "format": "bestaudio/best",
         "outtmpl": str(output_dir / f"{filename_template}.%(ext)s"),
         "postprocessors": [
@@ -34,6 +39,56 @@ def _get_ydl_opts(output_dir: Path, audio_format: str, filename_template: str) -
         "quiet": True,
         "no_warnings": True,
     }
+
+    if progress_callback:
+
+        def progress_hook(d):
+            """yt-dlp progress hook."""
+            if d["status"] == "downloading":
+                # Extract progress information
+                downloaded = d.get("downloaded_bytes", 0)
+                total = d.get("total_bytes") or d.get("total_bytes_estimate", 0)
+                speed = d.get("speed", 0)
+                eta = d.get("eta", 0)
+
+                # Calculate percentage
+                percent = (downloaded / total * 100) if total > 0 else 0
+
+                # Format speed
+                if speed:
+                    if speed > 1024 * 1024:
+                        speed_str = f"{speed / 1024 / 1024:.1f} MB/s"
+                    elif speed > 1024:
+                        speed_str = f"{speed / 1024:.1f} KB/s"
+                    else:
+                        speed_str = f"{speed:.0f} B/s"
+                else:
+                    speed_str = "N/A"
+
+                # Format ETA
+                if eta:
+                    if eta > 3600:
+                        eta_str = f"{eta // 3600}h {(eta % 3600) // 60}m"
+                    elif eta > 60:
+                        eta_str = f"{eta // 60}m {eta % 60}s"
+                    else:
+                        eta_str = f"{eta}s"
+                else:
+                    eta_str = "N/A"
+
+                progress_callback(
+                    {
+                        "downloaded_bytes": downloaded,
+                        "total_bytes": total,
+                        "percent": percent,
+                        "speed": speed_str,
+                        "eta": eta_str,
+                    }
+                )
+
+        opts["progress_hooks"] = [progress_hook]
+
+    return opts
 
 
 def _compute_filename(info: dict, filename_template: str) -> str:
@@ -68,6 +123,7 @@ def download(
     audio_format: str = "opus",
     filename_template: str = DEFAULT_FILENAME_TEMPLATE,
     fetch_lyrics: bool = True,
+    progress_callback: callable = None,
 ) -> Path:
     """
     Download a track from YouTube Music.
@@ -78,6 +134,7 @@ def download(
         audio_format: Audio format (opus, mp3, flac)
         filename_template: yt-dlp output template for filename
         fetch_lyrics: Whether to fetch and save lyrics
+        progress_callback: Optional callback for progress updates
 
     Returns:
         Path to the downloaded audio file
@@ -102,7 +159,7 @@ def download(
     logger.info("Downloading: %s - %s", artist, title)
 
     # Download the track
-    ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template)
+    ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template, progress_callback)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 

@@ -16,6 +16,9 @@
                     <p>Search and download music from YouTube Music</p>
                 </div>
                 <div class="header-controls">
+                    <a href="https://github.com/dadav/kikusan" target="_blank" class="github-star" aria-label="Star on GitHub">
+                        ⭐ Star on GitHub
+                    </a>
                     <select id="format-selector" class="format-selector" aria-label="Audio format">
                         <option value="opus">Opus</option>
                         <option value="mp3">MP3</option>
@@ -41,6 +44,15 @@
         </form>
 
         <div id="status" class="status"></div>
+
+        <!-- Queue Section -->
+        <div id="queue-section" class="queue-section">
+            <div class="queue-header">
+                <h2>Download Queue</h2>
+                <button id="clear-completed-btn" class="clear-btn">Clear Completed</button>
+            </div>
+            <div id="queue-list" class="queue-list"></div>
+        </div>
 
         <div id="results" class="results"></div>
     </div>
@@ -301,44 +313,30 @@
             const videoId = btn.dataset.videoId;
             const title = btn.dataset.title;
             const artist = btn.dataset.artist;
-
-            // Check if this is a "Save to Computer" click
-            if (btn.dataset.filePath) {
-                const filePath = encodeURIComponent(btn.dataset.filePath);
-                window.location.href = `/api/download-file/${filePath}`;
-                return;
-            }
-
             const format = formatSelector.value;
 
             btn.disabled = true;
             const originalText = btn.textContent;
-            btn.textContent = 'Downloading...';
-            showStatus(`Downloading: ${title} (${format.toUpperCase()})...`);
+            btn.textContent = 'Adding...';
 
             try {
-                const response = await fetch('/api/download', {
+                const response = await fetch('/api/queue/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ video_id: videoId, title, artist, audio_format: format })
                 });
                 const data = await response.json();
 
-                if (data.success) {
-                    btn.textContent = 'Save to Computer';
-                    btn.dataset.filePath = data.file_path;
-                    btn.classList.add('save-btn');
-                    btn.disabled = false;
-                    showStatus(data.message + ' - Click "Save to Computer" to download to your device');
-
+                if (response.ok) {
+                    btn.textContent = 'Queued';
+                    showStatus(`Added to queue: ${title}`);
                     setTimeout(() => {
                         btn.textContent = originalText;
-                        btn.classList.remove('save-btn');
-                        delete btn.dataset.filePath;
-                    }, 30000);
+                        btn.disabled = false;
+                    }, 2000);
                 } else {
                     btn.textContent = 'Failed';
-                    showStatus(data.message, true);
+                    showStatus('Failed to add to queue', true);
                     setTimeout(() => {
                         btn.disabled = false;
                         btn.textContent = originalText;
@@ -346,13 +344,145 @@
                 }
             } catch (error) {
                 btn.textContent = 'Error';
-                showStatus('Download failed: ' + error.message, true);
+                showStatus('Failed to add to queue: ' + error.message, true);
                 setTimeout(() => {
                     btn.disabled = false;
                     btn.textContent = originalText;
                 }, 3000);
             }
         }
+
+        // Queue Management
+        let eventSource = null;
+
+        function initQueue() {
+            // Connect to SSE endpoint for real-time updates
+            eventSource = new EventSource('/api/queue/stream');
+
+            eventSource.onmessage = (event) => {
+                const jobs = JSON.parse(event.data);
+                updateQueueUI(jobs);
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('SSE error:', error);
+                // Reconnect after 5 seconds
+                setTimeout(() => {
+                    if (eventSource) {
+                        eventSource.close();
+                    }
+                    initQueue();
+                }, 5000);
+            };
+
+            // Load initial queue
+            fetchQueue();
+        }
+
+        async function fetchQueue() {
+            try {
+                const response = await fetch('/api/queue/jobs');
+                const data = await response.json();
+                updateQueueUI(data.jobs);
+            } catch (error) {
+                console.error('Failed to fetch queue:', error);
+            }
+        }
+
+        function updateQueueUI(jobs) {
+            const queueList = document.getElementById('queue-list');
+            const queueSection = document.getElementById('queue-section');
+
+            if (jobs.length === 0) {
+                queueSection.style.display = 'none';
+                return;
+            }
+
+            queueSection.style.display = 'block';
+
+            queueList.innerHTML = jobs.map(job => {
+                const statusClass = job.status.toLowerCase();
+                let progressHtml = '';
+                let actionsHtml = '';
+
+                if (job.status === 'downloading') {
+                    progressHtml = `
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${job.progress}%"></div>
+                            <span class="progress-text">${job.progress.toFixed(1)}% - ${job.speed} - ${job.eta}</span>
+                        </div>
+                    `;
+                }
+
+                if (job.status === 'completed' && job.file_path) {
+                    actionsHtml = `
+                        <a href="/api/download-file/${encodeURIComponent(job.file_path)}" class="download-file-btn" download>
+                            💾 Save to Computer
+                        </a>
+                    `;
+                }
+
+                if (job.status === 'completed' || job.status === 'failed') {
+                    actionsHtml += `
+                        <button class="clear-job-btn" data-job-id="${job.id}">Clear</button>
+                    `;
+                }
+
+                const errorHtml = job.error ? `<div class="job-error">${escapeHtml(job.error)}</div>` : '';
+
+                return `
+                    <div class="job-card ${statusClass}">
+                        <div class="job-header">
+                            <div class="job-info">
+                                <span class="job-title">${escapeHtml(job.title)}</span>
+                                <span class="job-artist">${escapeHtml(job.artist)}</span>
+                            </div>
+                            <span class="job-status status-${statusClass}">${job.status.toUpperCase()}</span>
+                        </div>
+                        ${progressHtml}
+                        ${errorHtml}
+                        ${actionsHtml}
+                    </div>
+                `;
+            }).join('');
+
+            // Add clear button handlers
+            document.querySelectorAll('.clear-job-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const jobId = e.target.dataset.jobId;
+                    await removeJob(jobId);
+                });
+            });
+        }
+
+        async function removeJob(jobId) {
+            try {
+                await fetch(`/api/queue/${jobId}`, { method: 'DELETE' });
+            } catch (error) {
+                console.error('Failed to remove job:', error);
+                showStatus('Failed to remove job', true);
+            }
+        }
+
+        async function clearCompleted() {
+            try {
+                const response = await fetch('/api/queue/jobs');
+                const data = await response.json();
+                for (const job of data.jobs) {
+                    if (job.status === 'completed' || job.status === 'failed') {
+                        await removeJob(job.id);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to clear completed:', error);
+                showStatus('Failed to clear completed jobs', true);
+            }
+        }
+
+        document.getElementById('clear-completed-btn').addEventListener('click', clearCompleted);
+
+        // Initialize queue on page load
+        initQueue();
 
         function escapeHtml(text) {
             const div = document.createElement('div');

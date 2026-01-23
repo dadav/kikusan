@@ -54,11 +54,12 @@ body {
 header {
     text-align: center;
     margin-bottom: 2rem;
-    position: relative;
 }
 
 header > div {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
 
 header h1 {
@@ -76,9 +77,7 @@ header p {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-    position: absolute;
-    top: 0;
-    right: 0;
+    justify-content: center;
 }
 
 /* Format selector */
@@ -361,12 +360,6 @@ header p {
         font-size: 1.75rem;
     }
 
-    .header-controls {
-        position: static;
-        margin: 1rem auto 0;
-        justify-content: center;
-    }
-
     .format-selector {
         flex: 1;
     }
@@ -382,16 +375,6 @@ header p {
 
 /* Small screens (< 640px) */
 @media (max-width: 640px) {
-    header > div {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    .header-controls {
-        position: static;
-        justify-content: center;
-    }
 
     .track {
         padding: 0.75rem;
@@ -454,5 +437,284 @@ header p {
         text-overflow: ellipsis;
         -webkit-line-clamp: 1;
         line-clamp: 1;
+    }
+}
+
+/* GitHub Star Button */
+.github-star {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    border: 2px solid var(--border-color);
+    min-height: 44px;
+}
+
+.github-star:hover {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+    transform: scale(1.05);
+}
+
+/* Queue Section */
+.queue-section {
+    margin: 2rem 0;
+    display: none;
+}
+
+.queue-section.show {
+    display: block;
+}
+
+.queue-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.queue-header h2 {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+}
+
+.clear-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 36px;
+}
+
+.clear-btn:hover {
+    background: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary);
+}
+
+.queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.queue-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Job Cards */
+.job-card {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    transition: border-color 0.3s;
+}
+
+.job-card.queued {
+    border-color: #3498db;
+}
+
+.job-card.downloading {
+    border-color: #f39c12;
+}
+
+.job-card.completed {
+    border-color: #2ecc71;
+}
+
+.job-card.failed {
+    border-color: #e74c3c;
+}
+
+.job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+    gap: 1rem;
+}
+
+.job-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.job-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.job-artist {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.job-status {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.status-queued {
+    background: rgba(52, 152, 219, 0.2);
+    color: #3498db;
+}
+
+.status-downloading {
+    background: rgba(243, 156, 18, 0.2);
+    color: #f39c12;
+}
+
+.status-completed {
+    background: rgba(46, 204, 113, 0.2);
+    color: #2ecc71;
+}
+
+.status-failed {
+    background: rgba(231, 76, 60, 0.2);
+    color: #e74c3c;
+}
+
+/* Progress Bar */
+.progress-bar {
+    height: 32px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    margin: 0.75rem 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    transition: width 0.3s ease;
+    border-radius: 6px;
+}
+
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    z-index: 1;
+}
+
+/* Job Error */
+.job-error {
+    background: var(--error-bg);
+    color: var(--error-text);
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin: 0.5rem 0;
+    word-break: break-word;
+}
+
+/* Job Actions */
+.download-file-btn,
+.clear-job-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 0.5rem;
+    margin-right: 0.5rem;
+    border: none;
+    min-height: 36px;
+}
+
+.download-file-btn {
+    background: var(--accent-primary);
+    color: white;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.download-file-btn:hover {
+    background: var(--accent-hover);
+    transform: scale(1.05);
+}
+
+.clear-job-btn {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.clear-job-btn:hover {
+    background: var(--accent-primary);
+    color: white;
+}
+
+/* Mobile Queue Adjustments */
+@media (max-width: 640px) {
+    .queue-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+
+    .queue-header h2 {
+        font-size: 1.25rem;
+    }
+
+    .clear-btn {
+        width: 100%;
+    }
+
+    .job-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+    }
+
+    .job-status {
+        align-self: flex-start;
+    }
+
+    .progress-text {
+        font-size: 0.75rem;
+    }
+
+    .download-file-btn,
+    .clear-job-btn {
+        width: 100%;
+        margin-right: 0;
+        margin-bottom: 0.25rem;
     }
 }
