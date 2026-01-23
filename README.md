@@ -227,6 +227,30 @@ docker compose up -d
 | `NAVIDROME_USER`              | `None`                            | Navidrome username (optional)                  |
 | `NAVIDROME_PASSWORD`          | `None`                            | Navidrome password (optional)                  |
 | `NAVIDROME_KEEP_PLAYLIST`     | `keep`                            | Playlist name for protection (optional)        |
+| `YT_DLP_COOKIE_FILE`          | `None`                            | Path to cookies.txt file for yt-dlp (optional) |
+| `KIKUSAN_CORS_ORIGINS`        | `*`                               | CORS allowed origins (comma-separated)         |
+
+### Cookie Authentication
+
+Kikusan supports two methods for providing cookies to yt-dlp:
+
+1. **Web UI Upload** (Recommended):
+   - Open the web UI
+   - Click the settings icon (⚙️) in the header
+   - Upload your cookies.txt file
+   - The file is stored securely at `.kikusan/cookies.txt`
+
+2. **Environment Variable**:
+   ```bash
+   export YT_DLP_COOKIE_FILE=/path/to/cookies.txt
+   ```
+
+**Priority**: Web-uploaded cookies take precedence over environment variable.
+
+**Exporting Cookies**:
+- Chrome/Edge: Install "Get cookies.txt LOCALLY" extension
+- Firefox: Install "cookies.txt" extension
+- See [yt-dlp FAQ](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp) for detailed instructions
 
 ### File Organization
 

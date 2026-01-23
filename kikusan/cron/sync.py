@@ -152,8 +152,15 @@ def fetch_current_tracks(url: str) -> list[tuple[str, str, str]]:
 
 def _fetch_youtube_tracks(url: str) -> list[tuple[str, str, str]]:
     """Fetch tracks from YouTube/YouTube Music playlist."""
+    from kikusan.config import get_config
+    config = get_config()
+
     try:
-        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "extract_flat": True}) as ydl:
+        ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
+        cookie_path = config.cookie_file_path
+        if cookie_path:
+            ydl_opts["cookiefile"] = cookie_path
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
         # Check if this is a playlist
@@ -271,6 +278,9 @@ def download_new_tracks(
     skipped = 0
     failed = 0
 
+    from kikusan.config import get_config
+    config = get_config()
+
     for i, (video_id, title, artist) in enumerate(tracks, 1):
         logger.info("[%d/%d] Downloading: %s - %s", i, len(tracks), artist, title)
 
@@ -283,6 +293,7 @@ def download_new_tracks(
                 fetch_lyrics=True,
                 organization_mode=organization_mode,
                 use_primary_artist=use_primary_artist,
+                cookie_file=config.cookie_file_path,
             )
 
             if audio_path:

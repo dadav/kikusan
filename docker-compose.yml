@@ -5,11 +5,15 @@ services:
       - "8000:8000"
     volumes:
       - ./downloads:/downloads
+      - ./.kikusan:/.kikusan  # Persistent storage for uploaded cookies
+      # - ./cookies:/cookies  # Optional: for env var cookie method
     environment:
       - KIKUSAN_DOWNLOAD_DIR=/downloads
       - KIKUSAN_AUDIO_FORMAT=opus
       - KIKUSAN_WEB_PORT=8000
       - KIKUSAN_WEB_PLAYLIST=web-downloads
+      # - YT_DLP_COOKIE_FILE=/cookies/cookies.txt  # Optional: use env var instead of web upload
+      # - KIKUSAN_CORS_ORIGINS=*  # Optional: CORS allowed origins (default: *)
       # - GOTIFY_URL=  # Optional: Gotify server URL
       # - GOTIFY_TOKEN=  # Optional: Gotify app token
     restart: unless-stopped

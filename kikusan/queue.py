@@ -171,6 +171,7 @@ class QueueManager:
                     progress_callback=progress_callback,
                     organization_mode=config.organization_mode,
                     use_primary_artist=config.use_primary_artist,
+                    cookie_file=config.cookie_file_path,
                 ),
             )
 

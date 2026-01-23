@@ -6,7 +6,8 @@ import urllib.parse
 from pathlib import Path
 
 import yt_dlp
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -19,6 +20,16 @@ from kikusan.queue import QueueManager
 from kikusan.search import search
 
 app = FastAPI(title="Kikusan", description="Search and download music from YouTube Music")
+
+# Configure CORS
+config = get_config()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Global queue manager
 queue_manager: QueueManager | None = None
@@ -142,6 +153,7 @@ async def api_download(request: DownloadRequest):
             fetch_lyrics=True,
             organization_mode=config.organization_mode,
             use_primary_artist=config.use_primary_artist,
+            cookie_file=config.cookie_file_path,
         )
 
         # Add to playlist if configured
@@ -195,6 +207,7 @@ async def download_file(file_path: str):
 @app.get("/api/stream-url/{video_id}", response_model=StreamUrlResponse)
 async def get_stream_url(video_id: str):
     """Get direct stream URL for a video using yt-dlp."""
+    config = get_config()
     try:
         youtube_url = f"https://music.youtube.com/watch?v={video_id}"
         ydl_opts = {
@@ -202,6 +215,9 @@ async def get_stream_url(video_id: str):
             'quiet': True,
             'no_warnings': True,
         }
+        cookie_path = config.cookie_file_path
+        if cookie_path:
+            ydl_opts['cookiefile'] = cookie_path
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(youtube_url, download=False)
@@ -339,3 +355,73 @@ async def get_queue_stats():
         raise HTTPException(status_code=500, detail="Queue manager not initialized")
 
     return queue_manager.get_stats()
+
+
+# Cookie management endpoints
+@app.post("/api/settings/cookies/upload")
+async def upload_cookies(file: UploadFile = File(...)):
+    """Upload cookies.txt file for yt-dlp authentication."""
+    # Validate file
+    if not file.filename.endswith('.txt'):
+        raise HTTPException(status_code=400, detail="File must be a .txt file")
+
+    # Read file content
+    content = await file.read()
+    if len(content) > 1024 * 1024:  # 1MB limit
+        raise HTTPException(status_code=400, detail="File too large (max 1MB)")
+
+    # Basic validation - check for Netscape format
+    content_str = content.decode('utf-8', errors='ignore')
+    if '# Netscape HTTP Cookie File' not in content_str and '# HTTP Cookie File' not in content_str:
+        # Allow files without header as they might still work
+        pass
+
+    # Create .kikusan directory if it doesn't exist
+    kikusan_dir = Path(".kikusan")
+    kikusan_dir.mkdir(exist_ok=True)
+
+    # Write cookie file
+    cookie_path = kikusan_dir / "cookies.txt"
+    cookie_path.write_bytes(content)
+    cookie_path.chmod(0o600)  # Secure permissions
+
+    return {
+        "success": True,
+        "message": "Cookie file uploaded successfully",
+        "path": str(cookie_path)
+    }
+
+
+@app.get("/api/settings/cookies/status")
+async def get_cookie_status():
+    """Check if cookies are configured."""
+    config = get_config()
+    cookie_path = config.cookie_file_path
+
+    if cookie_path:
+        path = Path(cookie_path)
+        return {
+            "configured": True,
+            "source": "uploaded" if ".kikusan/cookies.txt" in cookie_path else "environment",
+            "path": cookie_path,
+            "exists": path.exists(),
+            "size": path.stat().st_size if path.exists() else 0
+        }
+    else:
+        return {
+            "configured": False,
+            "source": None,
+            "path": None,
+            "exists": False
+        }
+
+
+@app.delete("/api/settings/cookies")
+async def delete_cookies():
+    """Delete uploaded cookie file."""
+    cookie_path = Path(".kikusan/cookies.txt")
+    if cookie_path.exists():
+        cookie_path.unlink()
+        return {"success": True, "message": "Cookie file deleted"}
+    else:
+        raise HTTPException(status_code=404, detail="No uploaded cookie file found")

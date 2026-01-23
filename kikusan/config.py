@@ -1,7 +1,7 @@
 """Configuration handling for Kikusan."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # Default filename template: Artist - Title
@@ -23,10 +23,30 @@ class Config:
     web_playlist_name: str | None = None
     gotify_url: str | None = None
     gotify_token: str | None = None
+    yt_dlp_cookie_file: str | None = None
+    cors_origins: list[str] = field(default_factory=lambda: ["*"])
+
+    @property
+    def cookie_file_path(self) -> str | None:
+        """Get the effective cookie file path, checking uploaded file first."""
+        # Check for uploaded cookie file first
+        uploaded_cookie = Path(".kikusan/cookies.txt")
+        if uploaded_cookie.exists():
+            return str(uploaded_cookie)
+
+        # Fall back to env var
+        return self.yt_dlp_cookie_file
 
     @classmethod
     def from_env(cls) -> "Config":
         """Create config from environment variables with defaults."""
+        # Parse CORS origins
+        cors_env = os.getenv("KIKUSAN_CORS_ORIGINS", "*")
+        if cors_env == "*":
+            cors_origins = ["*"]
+        else:
+            cors_origins = [origin.strip() for origin in cors_env.split(",")]
+
         return cls(
             download_dir=Path(os.getenv("KIKUSAN_DOWNLOAD_DIR", "./downloads")),
             audio_format=os.getenv("KIKUSAN_AUDIO_FORMAT", "opus"),
@@ -39,6 +59,8 @@ class Config:
             web_playlist_name=os.getenv("KIKUSAN_WEB_PLAYLIST"),
             gotify_url=os.getenv("GOTIFY_URL"),
             gotify_token=os.getenv("GOTIFY_TOKEN"),
+            yt_dlp_cookie_file=os.getenv("YT_DLP_COOKIE_FILE"),
+            cors_origins=cors_origins,
         )
 
     @property

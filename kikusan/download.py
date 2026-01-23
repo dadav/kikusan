@@ -129,6 +129,7 @@ def _get_ydl_opts(
     info: dict,
     progress_callback: callable = None,
     use_primary_artist: bool = False,
+    cookie_file: str | None = None,
 ) -> dict:
     """Get common yt-dlp options."""
     # Calculate output path based on organization mode
@@ -155,6 +156,9 @@ def _get_ydl_opts(
         "quiet": True,
         "no_warnings": True,
     }
+
+    if cookie_file:
+        opts["cookiefile"] = cookie_file
 
     if progress_callback:
 
@@ -271,6 +275,7 @@ def download(
     progress_callback: callable = None,
     organization_mode: str = "flat",
     use_primary_artist: bool = False,
+    cookie_file: str | None = None,
 ) -> Path:
     """
     Download a track from YouTube Music.
@@ -292,7 +297,10 @@ def download(
     url = f"https://music.youtube.com/watch?v={video_id}"
 
     # Extract info first to get metadata
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+    ydl_opts_info = {"quiet": True, "no_warnings": True}
+    if cookie_file:
+        ydl_opts_info["cookiefile"] = cookie_file
+    with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
         info = ydl.extract_info(url, download=False)
 
     title = info.get("title", "Unknown")
@@ -309,7 +317,7 @@ def download(
 
     # Download the track
     ydl_opts = _get_ydl_opts(
-        output_dir, audio_format, filename_template, organization_mode, info, progress_callback, use_primary_artist
+        output_dir, audio_format, filename_template, organization_mode, info, progress_callback, use_primary_artist, cookie_file
     )
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
@@ -333,6 +341,7 @@ def download_url(
     fetch_lyrics: bool = True,
     organization_mode: str = "flat",
     use_primary_artist: bool = False,
+    cookie_file: str | None = None,
 ) -> Path | list[Path]:
     """
     Download a track or playlist from a YouTube/YouTube Music URL.
@@ -352,15 +361,18 @@ def download_url(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Extract info first to check if it's a playlist
-    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+    ydl_opts_info = {"quiet": True, "no_warnings": True}
+    if cookie_file:
+        ydl_opts_info["cookiefile"] = cookie_file
+    with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
         info = ydl.extract_info(url, download=False)
 
     # Check if this is a playlist
     if info.get("_type") == "playlist" or "entries" in info:
-        return _download_playlist(info, output_dir, audio_format, filename_template, fetch_lyrics, organization_mode, use_primary_artist)
+        return _download_playlist(info, output_dir, audio_format, filename_template, fetch_lyrics, organization_mode, use_primary_artist, cookie_file)
 
     # Single track
-    return _download_single(url, info, output_dir, audio_format, filename_template, fetch_lyrics, organization_mode, use_primary_artist)
+    return _download_single(url, info, output_dir, audio_format, filename_template, fetch_lyrics, organization_mode, use_primary_artist, cookie_file)
 
 
 def _download_single(
@@ -372,6 +384,7 @@ def _download_single(
     fetch_lyrics: bool,
     organization_mode: str,
     use_primary_artist: bool = False,
+    cookie_file: str | None = None,
 ) -> Path:
     """Download a single track."""
     title = info.get("title", "Unknown")
@@ -386,7 +399,7 @@ def _download_single(
 
     logger.info("Downloading: %s - %s", artist, title)
 
-    ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template, organization_mode, info, None, use_primary_artist)
+    ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template, organization_mode, info, None, use_primary_artist, cookie_file)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
@@ -408,6 +421,7 @@ def _download_playlist(
     fetch_lyrics: bool,
     organization_mode: str,
     use_primary_artist: bool = False,
+    cookie_file: str | None = None,
 ) -> list[Path]:
     """Download all tracks from a playlist."""
     entries = info.get("entries", [])
@@ -439,7 +453,7 @@ def _download_playlist(
 
         try:
             url = f"https://music.youtube.com/watch?v={video_id}"
-            ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template, organization_mode, entry, None, use_primary_artist)
+            ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template, organization_mode, entry, None, use_primary_artist, cookie_file)
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
 
