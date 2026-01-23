@@ -176,6 +176,8 @@ def _download_songs(
                 audio_format=config.audio_format,
                 filename_template=config.filename_template,
                 fetch_lyrics=True,
+                organization_mode=config.organization_mode,
+                use_primary_artist=config.use_primary_artist,
             )
 
             if audio_path:

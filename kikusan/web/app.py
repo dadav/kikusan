@@ -140,6 +140,8 @@ async def api_download(request: DownloadRequest):
             audio_format=audio_format,
             filename_template=config.filename_template,
             fetch_lyrics=True,
+            organization_mode=config.organization_mode,
+            use_primary_artist=config.use_primary_artist,
         )
 
         # Add to playlist if configured

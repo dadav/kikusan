@@ -212,19 +212,98 @@ docker compose up -d
 
 ### Environment Variables
 
-| Variable                    | Default                           | Description                                    |
-| --------------------------- | --------------------------------- | ---------------------------------------------- |
-| `KIKUSAN_DOWNLOAD_DIR`      | `./downloads`                     | Download directory                             |
-| `KIKUSAN_AUDIO_FORMAT`      | `opus`                            | Audio format (opus, mp3, flac)                 |
-| `KIKUSAN_FILENAME_TEMPLATE` | `%(artist,uploader)s - %(title)s` | Filename template (yt-dlp format)              |
-| `KIKUSAN_WEB_PORT`          | `8000`                            | Web server port                                |
-| `KIKUSAN_WEB_PLAYLIST`      | `None`                            | M3U playlist name for web downloads (optional) |
-| `GOTIFY_URL`                | `None`                            | Gotify server URL for notifications (optional) |
-| `GOTIFY_TOKEN`              | `None`                            | Gotify application token (optional)            |
-| `NAVIDROME_URL`             | `None`                            | Navidrome server URL for protection (optional) |
-| `NAVIDROME_USER`            | `None`                            | Navidrome username (optional)                  |
-| `NAVIDROME_PASSWORD`        | `None`                            | Navidrome password (optional)                  |
-| `NAVIDROME_KEEP_PLAYLIST`   | `keep`                            | Playlist name for protection (optional)        |
+| Variable                      | Default                           | Description                                    |
+| ----------------------------- | --------------------------------- | ---------------------------------------------- |
+| `KIKUSAN_DOWNLOAD_DIR`        | `./downloads`                     | Download directory                             |
+| `KIKUSAN_AUDIO_FORMAT`        | `opus`                            | Audio format (opus, mp3, flac)                 |
+| `KIKUSAN_FILENAME_TEMPLATE`   | `%(artist,uploader)s - %(title)s` | Filename template (yt-dlp format)              |
+| `KIKUSAN_ORGANIZATION_MODE`   | `flat`                            | File organization mode (flat, album)           |
+| `KIKUSAN_USE_PRIMARY_ARTIST`  | `false`                           | Use primary artist for folders (true, false)   |
+| `KIKUSAN_WEB_PORT`            | `8000`                            | Web server port                                |
+| `KIKUSAN_WEB_PLAYLIST`        | `None`                            | M3U playlist name for web downloads (optional) |
+| `GOTIFY_URL`                  | `None`                            | Gotify server URL for notifications (optional) |
+| `GOTIFY_TOKEN`                | `None`                            | Gotify application token (optional)            |
+| `NAVIDROME_URL`               | `None`                            | Navidrome server URL for protection (optional) |
+| `NAVIDROME_USER`              | `None`                            | Navidrome username (optional)                  |
+| `NAVIDROME_PASSWORD`          | `None`                            | Navidrome password (optional)                  |
+| `NAVIDROME_KEEP_PLAYLIST`     | `keep`                            | Playlist name for protection (optional)        |
+
+### File Organization
+
+Kikusan supports two file organization modes:
+
+#### Flat Mode (Default)
+
+All files stored in the download directory with the filename template:
+
+```
+downloads/
+├── Queen - Bohemian Rhapsody.opus
+├── Pink Floyd - Comfortably Numb.opus
+└── ...
+```
+
+#### Album Mode
+
+Files organized by artist and album with automatic metadata extraction:
+
+```
+downloads/
+├── Queen/
+│   ├── 1975 - A Night at the Opera/
+│   │   ├── 01 - Death on Two Legs.opus
+│   │   ├── 11 - Bohemian Rhapsody.opus
+│   │   └── 12 - God Save the Queen.opus
+│   └── 1991 - Innuendo/
+│       ├── 01 - Innuendo.opus
+│       └── 06 - The Show Must Go On.opus
+└── Pink Floyd/
+    └── 1979 - The Wall/
+        ├── 01 - In the Flesh.opus
+        └── 26 - Outside the Wall.opus
+```
+
+**Enable album mode:**
+
+```bash
+export KIKUSAN_ORGANIZATION_MODE=album
+```
+
+**Behavior:**
+
+- **Full metadata**: `Artist/Year - Album/NN - Track.ext`
+- **Missing track number**: `Artist/Year - Album/Track.ext`
+- **Missing album**: `Artist/Track.ext`
+- **Path sanitization**: Invalid filesystem characters are automatically removed
+
+**Multi-Artist Handling:**
+
+By default, album mode uses the full artist string from metadata:
+- `Queen feat. David Bowie` → folder: `Queen feat. David Bowie/`
+- `Artist1, Artist2` → folder: `Artist1, Artist2/`
+
+To use only the primary artist for cleaner folder organization:
+
+```bash
+export KIKUSAN_USE_PRIMARY_ARTIST=true
+```
+
+This extracts the main artist (before separators) for folder names:
+- `Queen feat. David Bowie` → folder: `Queen/`
+- `Artist1, Artist2` → folder: `Artist1/`
+- `Artist & Guest` → folder: `Artist/`
+
+Supported separators (in priority order): ` feat. `, ` ft. `, ` featuring `, ` with `, ` & `, `, `
+
+The full artist metadata is still preserved in the audio file tags.
+
+**Notes:**
+
+- Album mode is opt-in; flat mode remains the default for backward compatibility
+- Primary artist extraction is optional (disabled by default)
+- Existing files are not reorganized when switching modes
+- New downloads will use the selected organization mode
+- File existence checking works in both modes to prevent duplicates
 
 ### State Files & Playlists
 

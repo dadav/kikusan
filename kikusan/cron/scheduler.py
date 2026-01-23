@@ -38,6 +38,8 @@ class CronScheduler:
 
         self.audio_format = main_config.audio_format
         self.filename_template = main_config.filename_template
+        self.organization_mode = main_config.organization_mode
+        self.use_primary_artist = main_config.use_primary_artist
 
     def load_configuration(self) -> None:
         """Load and validate cron configuration."""
@@ -108,6 +110,8 @@ class CronScheduler:
                 download_dir=self.download_dir,
                 audio_format=self.audio_format,
                 filename_template=self.filename_template,
+                organization_mode=self.organization_mode,
+                use_primary_artist=self.use_primary_artist,
             )
 
             from kikusan.notifications import send_sync_notification
@@ -181,6 +185,8 @@ class CronScheduler:
                 audio_format=self.audio_format,
                 filename_template=self.filename_template,
                 config=plugin_config.config,
+                organization_mode=self.organization_mode,
+                use_primary_artist=self.use_primary_artist,
             )
 
             # Run sync

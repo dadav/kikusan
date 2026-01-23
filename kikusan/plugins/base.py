@@ -39,6 +39,8 @@ class PluginConfig:
     audio_format: str
     filename_template: str
     config: dict  # Plugin-specific config
+    organization_mode: str = "flat"  # File organization mode ("flat" or "album")
+    use_primary_artist: bool = False  # Extract primary artist for folder
 
 
 @dataclass

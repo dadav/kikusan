@@ -11,16 +11,132 @@ from kikusan.lyrics import get_lyrics, save_lyrics
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_path_component(name: str) -> str:
+    """Sanitize a string for use as a directory name."""
+    # Remove characters that are invalid in filenames/paths
+    invalid_chars = '<>:"|?*'
+    for char in invalid_chars:
+        name = name.replace(char, "")
+    # Replace forward/backslash with dash
+    name = name.replace("/", "-").replace("\\", "-")
+    # Strip leading/trailing whitespace and dots
+    name = name.strip(". ")
+    return name or "Unknown"
+
+
+def _get_primary_artist(artist: str) -> str:
+    """Extract primary artist from multi-artist string.
+
+    Splits on common separators and returns the first artist.
+
+    Examples:
+        "Queen, David Bowie" -> "Queen"
+        "Artist feat. Guest" -> "Artist"
+        "Artist & Other" -> "Artist"
+        "Artist" -> "Artist"
+
+    Args:
+        artist: Full artist string (may contain multiple artists)
+
+    Returns:
+        Primary artist name
+    """
+    # Common separators for multi-artist strings (in priority order)
+    separators = [
+        " feat. ",
+        " ft. ",
+        " featuring ",
+        " with ",
+        " & ",
+        ", ",
+    ]
+
+    # Try each separator and return first part if found
+    for separator in separators:
+        if separator in artist:
+            return artist.split(separator)[0].strip()
+
+    # No separator found, return as-is
+    return artist.strip()
+
+
+def _get_output_path(
+    output_dir: Path,
+    info: dict,
+    filename_template: str,
+    organization_mode: str,
+    use_primary_artist: bool = False,
+) -> str:
+    """
+    Calculate output path based on organization mode.
+
+    Args:
+        output_dir: Base download directory
+        info: yt-dlp metadata dict
+        filename_template: Filename template (used in flat mode)
+        organization_mode: "flat" or "album"
+        use_primary_artist: Extract primary artist for folder (before feat., &, etc.)
+
+    Returns:
+        Full output path template for yt-dlp
+    """
+    if organization_mode == "flat":
+        # Current behavior: flat structure
+        return str(output_dir / f"{filename_template}.%(ext)s")
+
+    # Album mode: organize by artist/album
+    artist = info.get("artist") or info.get("uploader", "Unknown Artist")
+
+    # Extract primary artist if requested
+    if use_primary_artist:
+        artist = _get_primary_artist(artist)
+
+    artist = _sanitize_path_component(artist)
+
+    album = info.get("album")
+    year = info.get("release_year")
+    track_number = info.get("track_number")
+
+    # Build path components
+    path_parts = [str(output_dir), artist]
+
+    if album:
+        # We have album info
+        album = _sanitize_path_component(album)
+        if year:
+            album_folder = f"{year} - {album}"
+        else:
+            album_folder = album
+        path_parts.append(album_folder)
+
+        # Build filename with optional track number
+        if track_number:
+            filename = f"{track_number:02d} - %(title)s.%(ext)s"
+        else:
+            filename = "%(title)s.%(ext)s"
+    else:
+        # No album info: just Artist/Track.ext
+        filename = "%(title)s.%(ext)s"
+
+    return str(Path(*path_parts) / filename)
+
+
 def _get_ydl_opts(
     output_dir: Path,
     audio_format: str,
     filename_template: str,
+    organization_mode: str,
+    info: dict,
     progress_callback: callable = None,
+    use_primary_artist: bool = False,
 ) -> dict:
     """Get common yt-dlp options."""
+    # Calculate output path based on organization mode
+    output_path = _get_output_path(output_dir, info, filename_template, organization_mode, use_primary_artist)
+
     opts = {
         "format": "bestaudio/best",
-        "outtmpl": str(output_dir / f"{filename_template}.%(ext)s"),
+        "outtmpl": output_path,
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -99,20 +215,49 @@ def _compute_filename(info: dict, filename_template: str) -> str:
     return yt_dlp.utils.sanitize_filename(filename)
 
 
-def _file_exists(output_dir: Path, info: dict, audio_format: str, filename_template: str) -> Path | None:
+def _file_exists(
+    output_dir: Path,
+    info: dict,
+    audio_format: str,
+    filename_template: str,
+    organization_mode: str,
+    use_primary_artist: bool = False,
+) -> Path | None:
     """Check if a file with the expected name already exists."""
-    expected_name = _compute_filename(info, filename_template)
+    if organization_mode == "flat":
+        # Existing flat mode logic
+        expected_name = _compute_filename(info, filename_template)
 
+        for ext in [audio_format, "opus", "mp3", "m4a", "flac"]:
+            # Check exact match
+            exact_path = output_dir / f"{expected_name}.{ext}"
+            if exact_path.exists():
+                return exact_path
+
+            # Check with glob for partial matches (handles long titles)
+            matches = list(output_dir.glob(f"{expected_name[:50]}*.{ext}"))
+            if matches:
+                return matches[0]
+
+        return None
+
+    # Album mode: search in artist/album subdirectories
+    artist = info.get("artist") or info.get("uploader", "Unknown Artist")
+    if use_primary_artist:
+        artist = _get_primary_artist(artist)
+    artist = _sanitize_path_component(artist)
+    artist_dir = output_dir / artist
+
+    if not artist_dir.exists():
+        return None
+
+    # Search for the file recursively in artist directory
+    title = info.get("title", "Unknown")
     for ext in [audio_format, "opus", "mp3", "m4a", "flac"]:
-        # Check exact match
-        exact_path = output_dir / f"{expected_name}.{ext}"
-        if exact_path.exists():
-            return exact_path
-
-        # Check with glob for partial matches (handles long titles)
-        matches = list(output_dir.glob(f"{expected_name[:50]}*.{ext}"))
-        if matches:
-            return matches[0]
+        # Try with and without track number
+        for file_path in artist_dir.rglob(f"*{title}*.{ext}"):
+            if file_path.is_file():
+                return file_path
 
     return None
 
@@ -124,6 +269,8 @@ def download(
     filename_template: str = DEFAULT_FILENAME_TEMPLATE,
     fetch_lyrics: bool = True,
     progress_callback: callable = None,
+    organization_mode: str = "flat",
+    use_primary_artist: bool = False,
 ) -> Path:
     """
     Download a track from YouTube Music.
@@ -132,9 +279,11 @@ def download(
         video_id: YouTube video ID
         output_dir: Directory to save the downloaded file
         audio_format: Audio format (opus, mp3, flac)
-        filename_template: yt-dlp output template for filename
+        filename_template: yt-dlp output template for filename (flat mode only)
         fetch_lyrics: Whether to fetch and save lyrics
         progress_callback: Optional callback for progress updates
+        organization_mode: "flat" or "album" organization
+        use_primary_artist: Extract primary artist for folder (before feat., &, etc.)
 
     Returns:
         Path to the downloaded audio file
@@ -151,7 +300,7 @@ def download(
     duration = info.get("duration", 0)
 
     # Check if already downloaded
-    existing = _file_exists(output_dir, info, audio_format, filename_template)
+    existing = _file_exists(output_dir, info, audio_format, filename_template, organization_mode, use_primary_artist)
     if existing:
         logger.info("Skipping (exists): %s - %s", artist, title)
         return existing
@@ -159,12 +308,14 @@ def download(
     logger.info("Downloading: %s - %s", artist, title)
 
     # Download the track
-    ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template, progress_callback)
+    ydl_opts = _get_ydl_opts(
+        output_dir, audio_format, filename_template, organization_mode, info, progress_callback, use_primary_artist
+    )
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
     # Find the downloaded file
-    audio_path = _find_downloaded_file(output_dir, info, audio_format, filename_template)
+    audio_path = _find_downloaded_file(output_dir, info, audio_format, filename_template, organization_mode, use_primary_artist)
 
     if audio_path and fetch_lyrics:
         lyrics = get_lyrics(title, artist, duration)
@@ -180,6 +331,8 @@ def download_url(
     audio_format: str = "opus",
     filename_template: str = DEFAULT_FILENAME_TEMPLATE,
     fetch_lyrics: bool = True,
+    organization_mode: str = "flat",
+    use_primary_artist: bool = False,
 ) -> Path | list[Path]:
     """
     Download a track or playlist from a YouTube/YouTube Music URL.
@@ -190,6 +343,8 @@ def download_url(
         audio_format: Audio format (opus, mp3, flac)
         filename_template: yt-dlp output template for filename
         fetch_lyrics: Whether to fetch and save lyrics
+        organization_mode: "flat" or "album" organization
+        use_primary_artist: Extract primary artist for folder (before feat., &, etc.)
 
     Returns:
         Path to downloaded file, or list of Paths for playlists
@@ -202,10 +357,10 @@ def download_url(
 
     # Check if this is a playlist
     if info.get("_type") == "playlist" or "entries" in info:
-        return _download_playlist(info, output_dir, audio_format, filename_template, fetch_lyrics)
+        return _download_playlist(info, output_dir, audio_format, filename_template, fetch_lyrics, organization_mode, use_primary_artist)
 
     # Single track
-    return _download_single(url, info, output_dir, audio_format, filename_template, fetch_lyrics)
+    return _download_single(url, info, output_dir, audio_format, filename_template, fetch_lyrics, organization_mode, use_primary_artist)
 
 
 def _download_single(
@@ -215,6 +370,8 @@ def _download_single(
     audio_format: str,
     filename_template: str,
     fetch_lyrics: bool,
+    organization_mode: str,
+    use_primary_artist: bool = False,
 ) -> Path:
     """Download a single track."""
     title = info.get("title", "Unknown")
@@ -222,18 +379,18 @@ def _download_single(
     duration = info.get("duration", 0)
 
     # Check if already downloaded
-    existing = _file_exists(output_dir, info, audio_format, filename_template)
+    existing = _file_exists(output_dir, info, audio_format, filename_template, organization_mode, use_primary_artist)
     if existing:
         logger.info("Skipping (exists): %s - %s", artist, title)
         return existing
 
     logger.info("Downloading: %s - %s", artist, title)
 
-    ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template)
+    ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template, organization_mode, info, None, use_primary_artist)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
-    audio_path = _find_downloaded_file(output_dir, info, audio_format, filename_template)
+    audio_path = _find_downloaded_file(output_dir, info, audio_format, filename_template, organization_mode, use_primary_artist)
 
     if audio_path and fetch_lyrics:
         lyrics = get_lyrics(title, artist, duration)
@@ -249,6 +406,8 @@ def _download_playlist(
     audio_format: str,
     filename_template: str,
     fetch_lyrics: bool,
+    organization_mode: str,
+    use_primary_artist: bool = False,
 ) -> list[Path]:
     """Download all tracks from a playlist."""
     entries = info.get("entries", [])
@@ -258,7 +417,6 @@ def _download_playlist(
 
     downloaded = []
     skipped = 0
-    ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template)
 
     for i, entry in enumerate(entries, 1):
         if entry is None:
@@ -270,7 +428,7 @@ def _download_playlist(
         duration = entry.get("duration", 0)
 
         # Check if already downloaded
-        existing = _file_exists(output_dir, entry, audio_format, filename_template)
+        existing = _file_exists(output_dir, entry, audio_format, filename_template, organization_mode, use_primary_artist)
         if existing:
             logger.info("[%d/%d] Skipping (exists): %s - %s", i, len(entries), artist, title)
             downloaded.append(existing)
@@ -281,10 +439,11 @@ def _download_playlist(
 
         try:
             url = f"https://music.youtube.com/watch?v={video_id}"
+            ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template, organization_mode, entry, None, use_primary_artist)
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
 
-            audio_path = _find_downloaded_file(output_dir, entry, audio_format, filename_template)
+            audio_path = _find_downloaded_file(output_dir, entry, audio_format, filename_template, organization_mode, use_primary_artist)
 
             if audio_path:
                 downloaded.append(audio_path)
@@ -301,27 +460,58 @@ def _download_playlist(
     return downloaded
 
 
-def _find_downloaded_file(output_dir: Path, info: dict, audio_format: str, filename_template: str) -> Path | None:
+def _find_downloaded_file(
+    output_dir: Path,
+    info: dict,
+    audio_format: str,
+    filename_template: str,
+    organization_mode: str,
+    use_primary_artist: bool = False,
+) -> Path | None:
     """Find the downloaded audio file in the output directory."""
-    expected_name = _compute_filename(info, filename_template)
+    if organization_mode == "flat":
+        # Existing flat mode logic
+        expected_name = _compute_filename(info, filename_template)
 
-    for ext in [audio_format, "opus", "m4a", "webm"]:
-        # Check exact match first
-        exact_path = output_dir / f"{expected_name}.{ext}"
-        if exact_path.exists():
-            return exact_path
+        for ext in [audio_format, "opus", "m4a", "webm"]:
+            # Check exact match first
+            exact_path = output_dir / f"{expected_name}.{ext}"
+            if exact_path.exists():
+                return exact_path
 
-        # Check with glob for partial matches
-        matches = list(output_dir.glob(f"{expected_name[:50]}*.{ext}"))
-        if matches:
-            return matches[0]
+            # Check with glob for partial matches
+            matches = list(output_dir.glob(f"{expected_name[:50]}*.{ext}"))
+            if matches:
+                return matches[0]
 
-    # Fallback: return most recently modified audio file
+        # Fallback: return most recently modified audio file
+        audio_extensions = ["opus", "mp3", "m4a", "flac", "webm"]
+        all_audio = []
+        for ext in audio_extensions:
+            all_audio.extend(output_dir.glob(f"*.{ext}"))
+
+        if all_audio:
+            return max(all_audio, key=lambda p: p.stat().st_mtime)
+
+        return None
+
+    # Album mode: search in artist/album subdirectories
+    artist = info.get("artist") or info.get("uploader", "Unknown Artist")
+    if use_primary_artist:
+        artist = _get_primary_artist(artist)
+    artist = _sanitize_path_component(artist)
+    artist_dir = output_dir / artist
+
+    if not artist_dir.exists():
+        return None
+
+    # Get all audio files in artist directory
     audio_extensions = ["opus", "mp3", "m4a", "flac", "webm"]
     all_audio = []
     for ext in audio_extensions:
-        all_audio.extend(output_dir.glob(f"*.{ext}"))
+        all_audio.extend(artist_dir.rglob(f"*.{ext}"))
 
+    # Return most recently modified file (should be the just-downloaded one)
     if all_audio:
         return max(all_audio, key=lambda p: p.stat().st_mtime)
 

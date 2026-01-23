@@ -123,6 +123,8 @@ def download_cmd(
                 audio_format=fmt,
                 filename_template=template,
                 fetch_lyrics=not no_lyrics,
+                organization_mode=config.organization_mode,
+                use_primary_artist=config.use_primary_artist,
             )
             if audio_path:
                 click.echo(f"Downloaded: {audio_path}")
@@ -145,6 +147,8 @@ def download_cmd(
                     filename_template=template,
                     fetch_lyrics=not no_lyrics,
                     playlist_name=playlist_name,
+                    organization_mode=config.organization_mode,
+                    use_primary_artist=config.use_primary_artist,
                 )
             else:
                 result = download_url(
@@ -153,6 +157,8 @@ def download_cmd(
                     audio_format=fmt,
                     filename_template=template,
                     fetch_lyrics=not no_lyrics,
+                    organization_mode=config.organization_mode,
+                    use_primary_artist=config.use_primary_artist,
                 )
 
                 if isinstance(result, list):
@@ -180,6 +186,8 @@ def download_cmd(
             audio_format=fmt,
             filename_template=template,
             fetch_lyrics=not no_lyrics,
+            organization_mode=config.organization_mode,
+            use_primary_artist=config.use_primary_artist,
         )
 
         if audio_path:
@@ -203,6 +211,8 @@ def _download_spotify_url(
     filename_template: str,
     fetch_lyrics: bool,
     playlist_name: str | None = None,
+    organization_mode: str = "flat",
+    use_primary_artist: bool = False,
 ) -> None:
     """Download tracks from a Spotify playlist/album by searching YouTube Music."""
     from kikusan.spotify import get_tracks_from_url
@@ -241,6 +251,8 @@ def _download_spotify_url(
                 audio_format=audio_format,
                 filename_template=filename_template,
                 fetch_lyrics=fetch_lyrics,
+                organization_mode=organization_mode,
+                use_primary_artist=use_primary_artist,
             )
 
             if audio_path:

@@ -31,6 +31,8 @@ def sync_playlist(
     download_dir: Path,
     audio_format: str,
     filename_template: str,
+    organization_mode: str = "flat",
+    use_primary_artist: bool = False,
 ) -> SyncResult:
     """
     Synchronize a playlist with its configured source.
@@ -40,6 +42,8 @@ def sync_playlist(
         download_dir: Download directory
         audio_format: Audio format (opus, mp3, flac)
         filename_template: Filename template for downloads
+        organization_mode: File organization mode ("flat" or "album")
+        use_primary_artist: Extract primary artist for folder (before feat., &, etc.)
 
     Returns:
         SyncResult with counts of operations performed
@@ -85,6 +89,8 @@ def sync_playlist(
             audio_format,
             filename_template,
             state,
+            organization_mode,
+            use_primary_artist,
         )
 
         # Remove old tracks if sync=true
@@ -243,6 +249,8 @@ def download_new_tracks(
     audio_format: str,
     filename_template: str,
     state: PlaylistState,
+    organization_mode: str = "flat",
+    use_primary_artist: bool = False,
 ) -> dict:
     """
     Download new tracks and update state.
@@ -253,6 +261,8 @@ def download_new_tracks(
         audio_format: Audio format
         filename_template: Filename template
         state: Playlist state to update
+        organization_mode: File organization mode ("flat" or "album")
+        use_primary_artist: Extract primary artist for folder (before feat., &, etc.)
 
     Returns:
         Dict with counts: downloaded, skipped, failed
@@ -271,6 +281,8 @@ def download_new_tracks(
                 audio_format=audio_format,
                 filename_template=filename_template,
                 fetch_lyrics=True,
+                organization_mode=organization_mode,
+                use_primary_artist=use_primary_artist,
             )
 
             if audio_path:

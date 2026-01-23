@@ -169,6 +169,8 @@ class QueueManager:
                     filename_template=config.filename_template,
                     fetch_lyrics=True,
                     progress_callback=progress_callback,
+                    organization_mode=config.organization_mode,
+                    use_primary_artist=config.use_primary_artist,
                 ),
             )
 

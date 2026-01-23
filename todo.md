@@ -1,0 +1,4 @@
+- Add a copy url button for each song in the ui
+- Add support for cookies (see https://github.com/guillevc/yubal?tab=readme-ov-file#-cookies-optional)
+- Add the possibility to search and download albums
+- Add options to configure CORS

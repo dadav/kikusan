@@ -81,6 +81,8 @@ def sync_once(plugin_name: str, config: str, output: str | None):
             audio_format=main_config.audio_format,
             filename_template=main_config.filename_template,
             config=plugin_config,
+            organization_mode=main_config.organization_mode,
+            use_primary_artist=main_config.use_primary_artist,
         )
 
         # Run sync
