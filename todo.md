@@ -1,4 +1,5 @@
-- Add a copy url button for each song in the ui
-- Add support for cookies (see https://github.com/guillevc/yubal?tab=readme-ov-file#-cookies-optional)
-- Add the possibility to search and download albums
-- Add options to configure CORS
+- [ ] Add cli flags to the subcommands (or global) for all config variables (like KIKUSAN_COOKIE_MODE, etc.) where it makes sense
+- [ ] Ensure every cli flag and env variable is documented in the README.md
+- [ ] Just like the query, the selected tab in web (song or album) should be in the url params too.
+- [ ] The text in the download progessbar in the web mode should be red like the buttons to match the theme.
+- [ ] The settings button doesnt match the style of the other buttons. Fix it.

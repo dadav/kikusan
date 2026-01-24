@@ -1,1 +1,0 @@
-- Add an option so that the cookies.txt is only used when required (for example if the song is age restricted or a private playlist was given). This should prevent users getting banned.
