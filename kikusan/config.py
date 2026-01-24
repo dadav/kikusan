@@ -24,6 +24,9 @@ class Config:
     gotify_url: str | None = None
     gotify_token: str | None = None
     yt_dlp_cookie_file: str | None = None
+    cookie_mode: str = "auto"
+    cookie_retry_delay: float = 1.0
+    log_cookie_usage: bool = True
     cors_origins: list[str] = field(default_factory=lambda: ["*"])
 
     @property
@@ -47,6 +50,24 @@ class Config:
         else:
             cors_origins = [origin.strip() for origin in cors_env.split(",")]
 
+        # Parse and validate cookie mode
+        cookie_mode = os.getenv("KIKUSAN_COOKIE_MODE", "auto").lower()
+        if cookie_mode not in ("auto", "always", "never"):
+            raise ValueError(
+                f"Invalid KIKUSAN_COOKIE_MODE: {cookie_mode}. "
+                f"Must be one of: auto, always, never"
+            )
+
+        # Parse cookie retry delay
+        cookie_retry_delay = float(os.getenv("KIKUSAN_COOKIE_RETRY_DELAY", "1.0"))
+
+        # Parse log cookie usage flag
+        log_cookie_usage = os.getenv("KIKUSAN_LOG_COOKIE_USAGE", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+
         return cls(
             download_dir=Path(os.getenv("KIKUSAN_DOWNLOAD_DIR", "./downloads")),
             audio_format=os.getenv("KIKUSAN_AUDIO_FORMAT", "opus"),
@@ -60,6 +81,9 @@ class Config:
             gotify_url=os.getenv("GOTIFY_URL"),
             gotify_token=os.getenv("GOTIFY_TOKEN"),
             yt_dlp_cookie_file=os.getenv("YT_DLP_COOKIE_FILE"),
+            cookie_mode=cookie_mode,
+            cookie_retry_delay=cookie_retry_delay,
+            log_cookie_usage=log_cookie_usage,
             cors_origins=cors_origins,
         )
 

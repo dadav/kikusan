@@ -5,8 +5,9 @@ from pathlib import Path
 
 import yt_dlp
 
-from kikusan.config import DEFAULT_FILENAME_TEMPLATE
+from kikusan.config import DEFAULT_FILENAME_TEMPLATE, get_config
 from kikusan.lyrics import get_lyrics, save_lyrics
+from kikusan.yt_dlp_wrapper import extract_info_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -157,8 +158,7 @@ def _get_ydl_opts(
         "no_warnings": True,
     }
 
-    if cookie_file:
-        opts["cookiefile"] = cookie_file
+    # Note: cookies are now handled by yt_dlp_wrapper, not here
 
     if progress_callback:
 
@@ -298,10 +298,13 @@ def download(
 
     # Extract info first to get metadata
     ydl_opts_info = {"quiet": True, "no_warnings": True}
-    if cookie_file:
-        ydl_opts_info["cookiefile"] = cookie_file
-    with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
-        info = ydl.extract_info(url, download=False)
+    info = extract_info_with_retry(
+        ydl_opts=ydl_opts_info,
+        url=url,
+        download=False,
+        cookie_file=cookie_file,
+        config=get_config(),
+    )
 
     title = info.get("title", "Unknown")
     artist = info.get("artist") or info.get("uploader", "Unknown")
@@ -319,8 +322,13 @@ def download(
     ydl_opts = _get_ydl_opts(
         output_dir, audio_format, filename_template, organization_mode, info, progress_callback, use_primary_artist, cookie_file
     )
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    extract_info_with_retry(
+        ydl_opts=ydl_opts,
+        url=url,
+        download=True,
+        cookie_file=cookie_file,
+        config=get_config(),
+    )
 
     # Find the downloaded file
     audio_path = _find_downloaded_file(output_dir, info, audio_format, filename_template, organization_mode, use_primary_artist)
@@ -362,10 +370,13 @@ def download_url(
 
     # Extract info first to check if it's a playlist
     ydl_opts_info = {"quiet": True, "no_warnings": True}
-    if cookie_file:
-        ydl_opts_info["cookiefile"] = cookie_file
-    with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
-        info = ydl.extract_info(url, download=False)
+    info = extract_info_with_retry(
+        ydl_opts=ydl_opts_info,
+        url=url,
+        download=False,
+        cookie_file=cookie_file,
+        config=get_config(),
+    )
 
     # Check if this is a playlist
     if info.get("_type") == "playlist" or "entries" in info:
@@ -454,8 +465,13 @@ def _download_playlist(
         try:
             url = f"https://music.youtube.com/watch?v={video_id}"
             ydl_opts = _get_ydl_opts(output_dir, audio_format, filename_template, organization_mode, entry, None, use_primary_artist, cookie_file)
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            extract_info_with_retry(
+                ydl_opts=ydl_opts,
+                url=url,
+                download=True,
+                cookie_file=cookie_file,
+                config=get_config(),
+            )
 
             audio_path = _find_downloaded_file(output_dir, entry, audio_format, filename_template, organization_mode, use_primary_artist)
 

@@ -18,6 +18,7 @@ from kikusan.download import download
 from kikusan.playlist import add_to_m3u
 from kikusan.queue import QueueManager
 from kikusan.search import search
+from kikusan.yt_dlp_wrapper import extract_info_with_retry
 
 app = FastAPI(title="Kikusan", description="Search and download music from YouTube Music")
 
@@ -289,31 +290,33 @@ async def get_stream_url(video_id: str):
             'quiet': True,
             'no_warnings': True,
         }
-        cookie_path = config.cookie_file_path
-        if cookie_path:
-            ydl_opts['cookiefile'] = cookie_path
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=False)
+        info = extract_info_with_retry(
+            ydl_opts=ydl_opts,
+            url=youtube_url,
+            download=False,
+            cookie_file=config.cookie_file_path,
+            config=config,
+        )
 
-            # Extract direct audio URL
-            if 'url' in info:
-                stream_url = info['url']
-            elif 'formats' in info:
-                audio_formats = [f for f in info['formats'] if f.get('acodec') != 'none']
-                if audio_formats:
-                    audio_formats.sort(key=lambda f: f.get('abr', 0), reverse=True)
-                    stream_url = audio_formats[0]['url']
-                else:
-                    raise HTTPException(status_code=404, detail="No audio stream found")
+        # Extract direct audio URL
+        if 'url' in info:
+            stream_url = info['url']
+        elif 'formats' in info:
+            audio_formats = [f for f in info['formats'] if f.get('acodec') != 'none']
+            if audio_formats:
+                audio_formats.sort(key=lambda f: f.get('abr', 0), reverse=True)
+                stream_url = audio_formats[0]['url']
             else:
-                raise HTTPException(status_code=404, detail="No stream URL available")
+                raise HTTPException(status_code=404, detail="No audio stream found")
+        else:
+            raise HTTPException(status_code=404, detail="No stream URL available")
 
-            return StreamUrlResponse(
-                video_id=video_id,
-                url=stream_url,
-                expires_in=21600
-            )
+        return StreamUrlResponse(
+            video_id=video_id,
+            url=stream_url,
+            expires_in=21600
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get stream URL: {str(e)}")
 

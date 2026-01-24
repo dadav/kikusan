@@ -7,11 +7,13 @@ from pathlib import Path
 
 import yt_dlp
 
+from kikusan.config import get_config
 from kikusan.cron.config import PlaylistConfig
 from kikusan.cron.state import PlaylistState, TrackState, get_state_dir, load_state, save_state
 from kikusan.download import download
 from kikusan.playlist import add_to_m3u
 from kikusan.reference_checker import get_navidrome_protection_cache, is_safe_to_delete
+from kikusan.yt_dlp_wrapper import extract_info_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -152,16 +154,17 @@ def fetch_current_tracks(url: str) -> list[tuple[str, str, str]]:
 
 def _fetch_youtube_tracks(url: str) -> list[tuple[str, str, str]]:
     """Fetch tracks from YouTube/YouTube Music playlist."""
-    from kikusan.config import get_config
     config = get_config()
 
     try:
         ydl_opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
-        cookie_path = config.cookie_file_path
-        if cookie_path:
-            ydl_opts["cookiefile"] = cookie_path
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+        info = extract_info_with_retry(
+            ydl_opts=ydl_opts,
+            url=url,
+            download=False,
+            cookie_file=config.cookie_file_path,
+            config=config,
+        )
 
         # Check if this is a playlist
         if info.get("_type") != "playlist" and "entries" not in info:
