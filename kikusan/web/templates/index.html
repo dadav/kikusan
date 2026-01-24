@@ -46,6 +46,11 @@
             <button type="submit">Search</button>
         </form>
 
+        <div class="search-tabs">
+            <button class="tab-btn active" data-tab="songs">Songs</button>
+            <button class="tab-btn" data-tab="albums">Albums</button>
+        </div>
+
         <div id="status" class="status"></div>
 
         <!-- Queue Section -->
@@ -57,7 +62,8 @@
             <div id="queue-list" class="queue-list"></div>
         </div>
 
-        <div id="results" class="results"></div>
+        <div id="songs-results" class="results active"></div>
+        <div id="albums-results" class="albums-grid"></div>
     </div>
 
     <script>
@@ -174,8 +180,34 @@
         // Search functionality
         const searchForm = document.getElementById('search-form');
         const searchInput = document.getElementById('search-input');
-        const resultsDiv = document.getElementById('results');
+        const resultsDiv = document.getElementById('songs-results');
         const statusDiv = document.getElementById('status');
+
+        // Tab management
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const songsResults = document.getElementById('songs-results');
+        const albumsResults = document.getElementById('albums-results');
+        let currentTab = 'songs';
+
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                tabButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                if (tab === 'songs') {
+                    songsResults.classList.add('active');
+                    albumsResults.classList.remove('active');
+                } else {
+                    songsResults.classList.remove('active');
+                    albumsResults.classList.add('active');
+                }
+
+                currentTab = tab;
+                const query = searchInput.value.trim();
+                if (query) performSearch(query);
+            });
+        });
 
         function showStatus(message, isError = false) {
             statusDiv.textContent = message;
@@ -211,8 +243,16 @@
         // Extract search logic into reusable function
         async function performSearch(query) {
             showStatus('Searching...');
-            resultsDiv.innerHTML = '';
+            if (currentTab === 'songs') {
+                songsResults.innerHTML = '';
+                await performSongSearch(query);
+            } else {
+                albumsResults.innerHTML = '';
+                await performAlbumSearch(query);
+            }
+        }
 
+        async function performSongSearch(query) {
             try {
                 const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
                 const data = await response.json();
@@ -226,6 +266,21 @@
                 renderResults(data.results);
             } catch (error) {
                 showStatus('Search failed: ' + error.message, true);
+            }
+        }
+
+        async function performAlbumSearch(query) {
+            try {
+                const response = await fetch(`/api/search/albums?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                if (data.results.length === 0) {
+                    showStatus('No albums found.');
+                    return;
+                }
+                showStatus('');
+                renderAlbums(data.results);
+            } catch (error) {
+                showStatus('Album search failed: ' + error.message, true);
             }
         }
 
@@ -246,18 +301,118 @@
                 performSearch(query);
             } else {
                 searchInput.value = '';
-                resultsDiv.innerHTML = '';
+                songsResults.innerHTML = '';
+                albumsResults.innerHTML = '';
                 showStatus('');
             }
         });
 
         initAutoSearch();
 
+        function renderAlbums(albums) {
+            albumsResults.innerHTML = albums.map(album => `
+                <div class="album-card">
+                    <img class="album-cover" src="${album.thumbnail_url || ''}" alt="${escapeHtml(album.title)}" onerror="this.style.display='none'">
+                    <div class="album-info">
+                        <div class="album-title">${escapeHtml(album.title)}</div>
+                        <div class="album-artist">${escapeHtml(album.artist)}</div>
+                        <div class="album-meta">
+                            ${album.year ? `<span>${album.year}</span>` : ''}
+                            ${album.track_count ? `<span>${album.track_count} tracks</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="album-actions">
+                        <button class="view-album-btn" data-browse-id="${album.browse_id}">View Tracks</button>
+                        <button class="download-album-btn"
+                                data-browse-id="${album.browse_id}"
+                                data-title="${escapeHtml(album.title)}"
+                                data-artist="${escapeHtml(album.artist)}">
+                            Download Album
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.view-album-btn').forEach(btn => {
+                btn.addEventListener('click', handleViewAlbum);
+            });
+            document.querySelectorAll('.download-album-btn').forEach(btn => {
+                btn.addEventListener('click', handleDownloadAlbum);
+            });
+        }
+
+        async function handleViewAlbum(e) {
+            const browseId = e.target.dataset.browseId;
+            try {
+                showStatus('Loading album tracks...');
+                const response = await fetch(`/api/album/${browseId}/tracks`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Failed to load album');
+
+                showStatus('');
+                currentTab = 'songs';
+                tabButtons.forEach(b => {
+                    if (b.dataset.tab === 'songs') b.classList.add('active');
+                    else b.classList.remove('active');
+                });
+                songsResults.classList.add('active');
+                albumsResults.classList.remove('active');
+
+                renderResults(data.tracks);
+                showStatus(`Showing ${data.tracks.length} tracks from "${data.album_title}"`);
+            } catch (error) {
+                showStatus('Failed to load album: ' + error.message, true);
+            }
+        }
+
+        async function handleDownloadAlbum(e) {
+            const btn = e.target;
+            const browseId = btn.dataset.browseId;
+            const title = btn.dataset.title;
+            const artist = btn.dataset.artist;
+            const format = formatSelector.value;
+
+            btn.disabled = true;
+            btn.textContent = 'Queuing...';
+
+            try {
+                const response = await fetch('/api/queue/add-album', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        browse_id: browseId,
+                        album_title: title,
+                        artist: artist,
+                        audio_format: format
+                    })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    btn.textContent = `Queued (${data.track_count})`;
+                    showStatus(`Added ${data.track_count} tracks to queue`);
+                    setTimeout(() => {
+                        btn.textContent = 'Download Album';
+                        btn.disabled = false;
+                    }, 3000);
+                } else {
+                    throw new Error(data.detail || 'Unknown error');
+                }
+            } catch (error) {
+                btn.textContent = 'Failed';
+                showStatus('Failed: ' + error.message, true);
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.textContent = 'Download Album';
+                }, 3000);
+            }
+        }
+
         function renderResults(tracks) {
             // Stop any playing audio when re-rendering results
             stopCurrentAudio();
 
-            resultsDiv.innerHTML = tracks.map(track => `
+            songsResults.innerHTML = tracks.map(track => `
                 <div class="track">
                     <div class="track-main">
                         <img
@@ -283,6 +438,9 @@
                         >
                             ▶
                         </button>
+                        <button class="copy-url-btn" data-video-id="${track.video_id}" aria-label="Copy URL" title="Copy YouTube Music URL">
+                            🔗
+                        </button>
                         <button
                             class="download-btn"
                             data-video-id="${track.video_id}"
@@ -304,10 +462,55 @@
                 });
             });
 
+            // Add copy URL button handlers
+            document.querySelectorAll('.copy-url-btn').forEach(btn => {
+                btn.addEventListener('click', handleCopyUrl);
+            });
+
             // Add download button handlers
             document.querySelectorAll('.download-btn').forEach(btn => {
                 btn.addEventListener('click', handleDownload);
             });
+        }
+
+        async function handleCopyUrl(e) {
+            e.stopPropagation();
+            const btn = e.target;
+            const videoId = btn.dataset.videoId;
+            const url = `https://music.youtube.com/watch?v=${videoId}`;
+            const originalText = btn.textContent;
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(url);
+                    btn.textContent = '✓';
+                    showStatus('URL copied to clipboard');
+                } else {
+                    // Fallback for older browsers
+                    const textarea = document.createElement('textarea');
+                    textarea.value = url;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    const success = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+
+                    if (success) {
+                        btn.textContent = '✓';
+                        showStatus('URL copied to clipboard');
+                    } else {
+                        throw new Error('Copy command failed');
+                    }
+                }
+
+                setTimeout(() => { btn.textContent = originalText; }, 2000);
+            } catch (error) {
+                console.error('Failed to copy URL:', error);
+                btn.textContent = '✗';
+                showStatus('Failed to copy URL: ' + error.message, true);
+                setTimeout(() => { btn.textContent = originalText; }, 2000);
+            }
         }
 
         async function handleDownload(e) {

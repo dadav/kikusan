@@ -94,6 +94,32 @@ class SearchResponse(BaseModel):
     results: list[TrackResponse]
 
 
+class AlbumResponse(BaseModel):
+    """Album data for API responses."""
+
+    browse_id: str
+    title: str
+    artist: str
+    year: int | None
+    track_count: int | None
+    thumbnail_url: str | None
+
+
+class AlbumSearchResponse(BaseModel):
+    """Response body for album search endpoint."""
+
+    query: str
+    results: list[AlbumResponse]
+
+
+class AlbumTracksResponse(BaseModel):
+    """Response body for album tracks endpoint."""
+
+    browse_id: str
+    album_title: str
+    tracks: list[TrackResponse]
+
+
 class StreamUrlResponse(BaseModel):
     """Response for stream URL endpoint."""
 
@@ -128,6 +154,54 @@ async def api_search(q: str = Query(..., min_length=1, description="Search query
             for track in results
         ],
     )
+
+
+@app.get("/api/search/albums", response_model=AlbumSearchResponse)
+async def api_search_albums(q: str = Query(..., min_length=1)):
+    """Search YouTube Music for albums."""
+    from kikusan.search import search_albums
+
+    results = search_albums(q, limit=20)
+    return AlbumSearchResponse(
+        query=q,
+        results=[AlbumResponse(**album.__dict__) for album in results],
+    )
+
+
+@app.get("/api/album/{browse_id}/tracks", response_model=AlbumTracksResponse)
+async def api_get_album_tracks(browse_id: str):
+    """Get all tracks for an album."""
+    from kikusan.search import get_album_tracks
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        tracks = get_album_tracks(browse_id)
+        if not tracks:
+            raise HTTPException(status_code=404, detail="No tracks found for this album")
+
+        return AlbumTracksResponse(
+            browse_id=browse_id,
+            album_title=tracks[0].album if tracks else "Unknown Album",
+            tracks=[
+                TrackResponse(
+                    video_id=track.video_id,
+                    title=track.title,
+                    artist=track.artist,
+                    album=track.album,
+                    duration=track.duration_display,
+                    thumbnail_url=track.thumbnail_url,
+                    view_count=track.view_count,
+                )
+                for track in tracks
+            ],
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get album tracks: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/download", response_model=DownloadResponse)
@@ -256,6 +330,15 @@ class QueueAddRequest(BaseModel):
     audio_format: str = "opus"
 
 
+class QueueAddAlbumRequest(BaseModel):
+    """Request to add an album to the queue."""
+
+    browse_id: str
+    album_title: str
+    artist: str
+    audio_format: str = "opus"
+
+
 class QueueAddResponse(BaseModel):
     """Response after adding a job."""
 
@@ -285,6 +368,53 @@ async def add_to_queue(request: QueueAddRequest):
     )
 
     return QueueAddResponse(job_id=job_id, status="queued")
+
+
+@app.post("/api/queue/add-album")
+async def add_album_to_queue(request: QueueAddAlbumRequest):
+    """Add all tracks from an album to the download queue."""
+    if not queue_manager:
+        raise HTTPException(status_code=500, detail="Queue manager not initialized")
+
+    from kikusan.search import get_album_tracks
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        tracks = get_album_tracks(request.browse_id)
+        if not tracks:
+            raise HTTPException(status_code=404, detail="No tracks found for this album")
+
+        # Validate format
+        valid_formats = ["opus", "mp3", "flac"]
+        audio_format = request.audio_format.lower()
+        if audio_format not in valid_formats:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid format. Must be one of: {', '.join(valid_formats)}"
+            )
+
+        job_ids = []
+        for track in tracks:
+            job_id = await queue_manager.add_job(
+                video_id=track.video_id,
+                title=track.title,
+                artist=track.artist,
+                format=audio_format,
+            )
+            job_ids.append(job_id)
+
+        logger.info("Queued %d tracks from album: %s", len(job_ids), request.album_title)
+        return {
+            "job_ids": job_ids,
+            "track_count": len(job_ids),
+            "message": f"Added {len(job_ids)} tracks to queue"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to queue album: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/queue/jobs")
