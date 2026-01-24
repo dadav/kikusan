@@ -66,6 +66,36 @@
         <div id="albums-results" class="albums-grid"></div>
     </div>
 
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <section class="settings-section">
+                    <h3>Cookie Authentication</h3>
+                    <p class="settings-description">
+                        Upload a cookies.txt file to access age-restricted or region-locked content.
+                        <a href="https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp" target="_blank">Learn more</a>
+                    </p>
+
+                    <div id="cookie-status" class="cookie-status">
+                        <span class="status-indicator"></span>
+                        <span class="status-text">Checking...</span>
+                    </div>
+
+                    <div class="cookie-actions">
+                        <input type="file" id="cookie-file-input" accept=".txt" style="display: none;">
+                        <button id="upload-cookie-btn" class="btn btn-primary">Upload cookies.txt</button>
+                        <button id="delete-cookie-btn" class="btn btn-danger" style="display: none;">Delete Cookie File</button>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Theme management
         const themeToggle = document.getElementById('theme-toggle');
@@ -818,35 +848,5 @@
             return div.innerHTML;
         }
     </script>
-
-    <!-- Settings Modal -->
-    <div id="settings-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Settings</h2>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <section class="settings-section">
-                    <h3>Cookie Authentication</h3>
-                    <p class="settings-description">
-                        Upload a cookies.txt file to access age-restricted or region-locked content.
-                        <a href="https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp" target="_blank">Learn more</a>
-                    </p>
-
-                    <div id="cookie-status" class="cookie-status">
-                        <span class="status-indicator"></span>
-                        <span class="status-text">Checking...</span>
-                    </div>
-
-                    <div class="cookie-actions">
-                        <input type="file" id="cookie-file-input" accept=".txt" style="display: none;">
-                        <button id="upload-cookie-btn" class="btn btn-primary">Upload cookies.txt</button>
-                        <button id="delete-cookie-btn" class="btn btn-danger" style="display: none;">Delete Cookie File</button>
-                    </div>
-                </section>
-            </div>
-        </div>
-    </div>
 </body>
 </html>
