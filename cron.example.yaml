@@ -96,6 +96,45 @@ plugins:
   #     limit: 20
   #     min_score: 50
 
+# Hooks - run commands when events occur
+# Useful for integrating with external systems like Navidrome
+hooks:
+  # Import playlist to Navidrome when updated
+  # Uses Navidrome's playlist import API (see https://github.com/navidrome/navidrome/pull/2273)
+  - event: playlist_updated
+    command: |
+      curl -X POST \
+        -H "Content-Type: audio/x-mpegurl" \
+        -H "X-ND-Authorization: Bearer ${NAVIDROME_TOKEN}" \
+        --data-binary @"${KIKUSAN_PLAYLIST_PATH}" \
+        "${NAVIDROME_URL}/api/playlist"
+    timeout: 30  # seconds (default: 60)
+
+  # Log sync results
+  - event: sync_completed
+    command: |
+      echo "[$(date)] Sync completed: ${KIKUSAN_PLAYLIST_NAME} - Downloaded: ${KIKUSAN_DOWNLOADED}, Skipped: ${KIKUSAN_SKIPPED}, Failed: ${KIKUSAN_FAILED}" >> /var/log/kikusan-sync.log
+    run_on_error: true  # Run even if sync failed (default: false)
+
+  # Custom script example - backup playlist on update
+  # - event: playlist_updated
+  #   command: cp "${KIKUSAN_PLAYLIST_PATH}" "/backup/playlists/${KIKUSAN_PLAYLIST_NAME}_$(date +%Y%m%d).m3u"
+
+# Hook events:
+#   - playlist_updated: Triggered when an M3U playlist is created/updated
+#   - sync_completed: Triggered after every sync operation (success or failure)
+#
+# Environment variables available to hooks:
+#   KIKUSAN_EVENT          - Event type (playlist_updated, sync_completed)
+#   KIKUSAN_PLAYLIST_NAME  - Name of the playlist/plugin
+#   KIKUSAN_PLAYLIST_PATH  - Absolute path to the M3U file (if exists)
+#   KIKUSAN_SYNC_TYPE      - Type: "playlist" or "plugin"
+#   KIKUSAN_DOWNLOADED     - Number of tracks downloaded
+#   KIKUSAN_SKIPPED        - Number of tracks skipped
+#   KIKUSAN_DELETED        - Number of tracks deleted
+#   KIKUSAN_FAILED         - Number of tracks that failed
+#   KIKUSAN_SUCCESS        - "true" or "false"
+
 # Usage:
 #   kikusan cron                          # Run continuously
 #   kikusan cron --config cron.yaml       # Specify config file

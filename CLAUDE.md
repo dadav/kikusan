@@ -41,6 +41,12 @@ Kikusan is a tool to search and download music from youtube music. It must use y
   - Environment-based configuration: NAVIDROME_URL, NAVIDROME_USER, NAVIDROME_PASSWORD
 - `kikusan/cron/sync.py`: Playlist synchronization with reference-aware deletion and Navidrome protection
 - `kikusan/plugins/sync.py`: Plugin synchronization with reference-aware deletion and Navidrome protection
+- `kikusan/hooks.py`: Generic hook system for running commands on events
+  - Supports `playlist_updated` and `sync_completed` events
+  - Configured via `hooks` section in `cron.yaml`
+  - Passes context data via environment variables (KIKUSAN_*)
+  - Supports timeout and run_on_error options
+- `kikusan/cron/scheduler.py`: Orchestrates sync jobs and triggers hooks after completion
 
 ### CLI Flags
 All major configuration variables have corresponding CLI flags:

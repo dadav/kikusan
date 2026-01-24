@@ -13,6 +13,7 @@ Search and download music from YouTube Music with lyrics.
 - **Plugin System**: Extensible architecture for custom music sources
 - **Scheduled Sync**: Automated playlist monitoring with cron scheduling
 - **M3U Playlists**: Automatic playlist file generation for downloads
+- **Hooks**: Run custom commands when events occur (e.g., import playlists to Navidrome)
 
 ## Usecase
 
@@ -200,6 +201,75 @@ Prevent deletion of songs during sync if they are starred or in a designated pla
 3. You've starred the song in Symfonium (synced to Navidrome)
 4. Kikusan detects the star and keeps the file on disk
 5. File remains available in Navidrome/Symfonium
+
+### Hooks
+
+Hooks allow you to run custom commands when certain events occur during sync operations. This is useful for integrating with external systems like Navidrome.
+
+**Supported Events:**
+
+- `playlist_updated`: Triggered when an M3U playlist is created or updated
+- `sync_completed`: Triggered after every sync operation (success or failure)
+
+**Configuration:**
+
+Add a `hooks` section to your `cron.yaml`:
+
+```yaml
+hooks:
+  # Import playlist to Navidrome when updated
+  - event: playlist_updated
+    command: |
+      curl -X POST \
+        -H "Content-Type: audio/x-mpegurl" \
+        -H "X-ND-Authorization: Bearer ${NAVIDROME_TOKEN}" \
+        --data-binary @"${KIKUSAN_PLAYLIST_PATH}" \
+        "${NAVIDROME_URL}/api/playlist"
+    timeout: 30  # seconds (default: 60)
+
+  # Log sync results
+  - event: sync_completed
+    command: echo "Sync: ${KIKUSAN_PLAYLIST_NAME}" >> /var/log/sync.log
+    run_on_error: true  # Run even if sync failed (default: false)
+```
+
+**Environment Variables:**
+
+Hooks receive context via environment variables:
+
+| Variable               | Description                                    |
+| ---------------------- | ---------------------------------------------- |
+| `KIKUSAN_EVENT`        | Event type (playlist_updated, sync_completed)  |
+| `KIKUSAN_PLAYLIST_NAME`| Name of the playlist/plugin                    |
+| `KIKUSAN_PLAYLIST_PATH`| Absolute path to the M3U file (if exists)      |
+| `KIKUSAN_SYNC_TYPE`    | Type: "playlist" or "plugin"                   |
+| `KIKUSAN_DOWNLOADED`   | Number of tracks downloaded                    |
+| `KIKUSAN_SKIPPED`      | Number of tracks skipped                       |
+| `KIKUSAN_DELETED`      | Number of tracks deleted                       |
+| `KIKUSAN_FAILED`       | Number of tracks that failed                   |
+| `KIKUSAN_SUCCESS`      | "true" or "false"                              |
+
+**Navidrome Integration Example:**
+
+To automatically import playlists to Navidrome using its [playlist import API](https://github.com/navidrome/navidrome/pull/2273):
+
+1. Set environment variables:
+   ```bash
+   export NAVIDROME_URL="https://music.example.com"
+   export NAVIDROME_TOKEN="your-api-token"
+   ```
+
+2. Add hook to `cron.yaml`:
+   ```yaml
+   hooks:
+     - event: playlist_updated
+       command: |
+         curl -X POST \
+           -H "Content-Type: audio/x-mpegurl" \
+           -H "X-ND-Authorization: Bearer ${NAVIDROME_TOKEN}" \
+           --data-binary @"${KIKUSAN_PLAYLIST_PATH}" \
+           "${NAVIDROME_URL}/api/playlist"
+   ```
 
 ### Docker
 

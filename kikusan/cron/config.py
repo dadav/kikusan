@@ -2,11 +2,13 @@
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 from croniter import croniter
+
+from kikusan.hooks import HookConfig, parse_hooks_config
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,7 @@ class CronConfig:
 
     playlists: dict[str, PlaylistConfig]
     plugins: dict[str, PluginInstanceConfig]
+    hooks: list[HookConfig] = field(default_factory=list)
 
 
 def load_config(path: Path) -> CronConfig:
@@ -174,12 +177,21 @@ def load_config(path: Path) -> CronConfig:
                 config=config["config"],
             )
 
+    # Load hooks (optional, defaults to empty)
+    hooks = []
+    if "hooks" in data:
+        hooks_data = data["hooks"]
+        if not isinstance(hooks_data, list):
+            raise ValueError("'hooks' must be a list")
+        hooks = parse_hooks_config(hooks_data)
+
     logger.info(
-        "Loaded configuration for %d playlist(s) and %d plugin(s)",
+        "Loaded configuration for %d playlist(s), %d plugin(s), and %d hook(s)",
         len(playlists),
         len(plugins),
+        len(hooks),
     )
-    return CronConfig(playlists=playlists, plugins=plugins)
+    return CronConfig(playlists=playlists, plugins=plugins, hooks=hooks)
 
 
 def validate_playlist_name(name: str) -> str:
