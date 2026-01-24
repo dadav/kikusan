@@ -41,3 +41,31 @@ Kikusan is a tool to search and download music from youtube music. It must use y
   - Environment-based configuration: NAVIDROME_URL, NAVIDROME_USER, NAVIDROME_PASSWORD
 - `kikusan/cron/sync.py`: Playlist synchronization with reference-aware deletion and Navidrome protection
 - `kikusan/plugins/sync.py`: Plugin synchronization with reference-aware deletion and Navidrome protection
+
+### CLI Flags
+All major configuration variables have corresponding CLI flags:
+
+**Global flags (apply to all subcommands):**
+- `--cookie-mode`: Cookie usage mode (auto, always, never)
+- `--cookie-retry-delay`: Delay before retrying with cookies
+- `--no-log-cookie-usage`: Disable cookie usage logging
+
+**download command:**
+- `--organization-mode`: File organization (flat, album)
+- `--use-primary-artist / --no-use-primary-artist`: Use primary artist for folder names
+
+**web command:**
+- `--cors-origins`: CORS allowed origins
+- `--web-playlist`: M3U playlist name for web downloads
+
+**cron command:**
+- `--format`: Audio format
+- `--organization-mode`: File organization
+- `--use-primary-artist / --no-use-primary-artist`: Use primary artist for folder names
+
+**plugins run command:**
+- `--format`: Audio format
+- `--organization-mode`: File organization
+- `--use-primary-artist / --no-use-primary-artist`: Use primary artist for folder names
+
+CLI flags take precedence over environment variables. Options with `envvar` attribute automatically read from the corresponding environment variable if not specified on the command line.

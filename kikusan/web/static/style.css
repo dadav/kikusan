@@ -791,7 +791,7 @@ header p {
 
 .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #3498db, #2ecc71);
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-hover));
     transition: width 0.3s ease;
     border-radius: 6px;
 }
@@ -803,8 +803,8 @@ header p {
     transform: translate(-50%, -50%);
     font-size: 0.85rem;
     font-weight: 700;
-    color: var(--accent-primary);
-    text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
     white-space: nowrap;
     z-index: 1;
 }
@@ -895,26 +895,26 @@ header p {
     }
 }
 
-/* Header actions */
-.header-actions .icon-btn {
+/* Settings button - matches theme toggle style */
+.icon-btn {
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
     padding: 0.5rem;
-    font-size: 1.2rem;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
     cursor: pointer;
+    font-size: 1.5rem;
+    line-height: 1;
     transition: all 0.2s;
-    min-height: 40px;
-    min-width: 40px;
+    min-height: 44px;
+    min-width: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.header-actions .icon-btn:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--border-hover);
+.icon-btn:hover {
+    border-color: var(--accent-primary);
+    transform: scale(1.1);
 }
 
 /* Modal */

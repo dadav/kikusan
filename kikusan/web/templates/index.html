@@ -222,19 +222,10 @@
         tabButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 const tab = btn.dataset.tab;
-                tabButtons.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
+                setActiveTab(tab);
 
-                if (tab === 'songs') {
-                    songsResults.classList.add('active');
-                    albumsResults.classList.remove('active');
-                } else {
-                    songsResults.classList.remove('active');
-                    albumsResults.classList.add('active');
-                }
-
-                currentTab = tab;
                 const query = searchInput.value.trim();
+                updateUrlParams(query, tab);
                 if (query) performSearch(query);
             });
         });
@@ -251,18 +242,52 @@
             return urlParams.get(name);
         }
 
-        function updateUrlWithQuery(query) {
+        function updateUrlParams(query, tab) {
             const url = new URL(window.location);
             if (query) {
                 url.searchParams.set('q', query);
             } else {
                 url.searchParams.delete('q');
             }
+            if (tab && tab !== 'songs') {
+                url.searchParams.set('tab', tab);
+            } else {
+                url.searchParams.delete('tab');
+            }
             window.history.pushState({}, '', url);
+        }
+
+        // Initialize tab from URL
+        function initTabFromUrl() {
+            const tab = getQueryParam('tab') || 'songs';
+            if (tab === 'songs' || tab === 'albums') {
+                setActiveTab(tab);
+            }
+        }
+
+        // Set active tab (updates UI and currentTab variable)
+        function setActiveTab(tab) {
+            currentTab = tab;
+            tabButtons.forEach(b => {
+                if (b.dataset.tab === tab) {
+                    b.classList.add('active');
+                } else {
+                    b.classList.remove('active');
+                }
+            });
+
+            if (tab === 'songs') {
+                songsResults.classList.add('active');
+                albumsResults.classList.remove('active');
+            } else {
+                songsResults.classList.remove('active');
+                albumsResults.classList.add('active');
+            }
         }
 
         // Auto-search on page load
         function initAutoSearch() {
+            initTabFromUrl();
             const query = getQueryParam('q');
             if (query) {
                 searchInput.value = query;
@@ -319,13 +344,20 @@
             const query = searchInput.value.trim();
             if (!query) return;
 
-            updateUrlWithQuery(query);
+            updateUrlParams(query, currentTab);
             performSearch(query);
         });
 
         // Handle browser back/forward
         window.addEventListener('popstate', () => {
             const query = getQueryParam('q');
+            const tab = getQueryParam('tab') || 'songs';
+
+            // Restore tab state
+            if (tab === 'songs' || tab === 'albums') {
+                setActiveTab(tab);
+            }
+
             if (query) {
                 searchInput.value = query;
                 performSearch(query);
@@ -380,13 +412,7 @@
                 if (!response.ok) throw new Error(data.detail || 'Failed to load album');
 
                 showStatus('');
-                currentTab = 'songs';
-                tabButtons.forEach(b => {
-                    if (b.dataset.tab === 'songs') b.classList.add('active');
-                    else b.classList.remove('active');
-                });
-                songsResults.classList.add('active');
-                albumsResults.classList.remove('active');
+                setActiveTab('songs');
 
                 renderResults(data.tracks);
                 showStatus(`Showing ${data.tracks.length} tracks from "${data.album_title}"`);

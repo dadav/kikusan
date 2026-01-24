@@ -1,6 +1,7 @@
 """Cron CLI command implementation."""
 
 import logging
+import os
 from pathlib import Path
 
 import click
@@ -30,7 +31,35 @@ logger = logging.getLogger(__name__)
     is_flag=True,
     help="Run all playlists once and exit (skip scheduling)",
 )
-def cron(config: str, output: str | None, once: bool):
+@click.option(
+    "--format",
+    "-f",
+    "audio_format",
+    default=None,
+    type=click.Choice(["opus", "mp3", "flac"]),
+    envvar="KIKUSAN_AUDIO_FORMAT",
+    help="Audio format for downloads. Default: opus",
+)
+@click.option(
+    "--organization-mode",
+    type=click.Choice(["flat", "album"]),
+    default=None,
+    envvar="KIKUSAN_ORGANIZATION_MODE",
+    help="File organization: flat (all in one dir) or album (Artist/Year - Album/Track). Default: flat",
+)
+@click.option(
+    "--use-primary-artist/--no-use-primary-artist",
+    default=None,
+    help="Use only primary artist for folder names in album mode",
+)
+def cron(
+    config: str,
+    output: str | None,
+    once: bool,
+    audio_format: str | None,
+    organization_mode: str | None,
+    use_primary_artist: bool | None,
+):
     """
     Run continuous playlist sync based on cron.yaml.
 
@@ -64,6 +93,14 @@ def cron(config: str, output: str | None, once: bool):
       # Override download directory
       kikusan cron --output /custom/downloads
     """
+    # Set environment variables from CLI flags (they override env vars)
+    if audio_format is not None:
+        os.environ["KIKUSAN_AUDIO_FORMAT"] = audio_format
+    if organization_mode is not None:
+        os.environ["KIKUSAN_ORGANIZATION_MODE"] = organization_mode
+    if use_primary_artist is not None:
+        os.environ["KIKUSAN_USE_PRIMARY_ARTIST"] = "true" if use_primary_artist else "false"
+
     config_path = Path(config)
     download_dir = Path(output) if output else None
 

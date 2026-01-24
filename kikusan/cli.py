@@ -1,6 +1,7 @@
 """Command-line interface for Kikusan."""
 
 import logging
+import os
 from pathlib import Path
 
 import click
@@ -19,9 +20,39 @@ logging.basicConfig(
 
 @click.group()
 @click.version_option()
-def main():
+@click.option(
+    "--cookie-mode",
+    type=click.Choice(["auto", "always", "never"]),
+    default=None,
+    envvar="KIKUSAN_COOKIE_MODE",
+    help="Cookie usage mode: auto (retry with cookies on auth errors), always (always use cookies), never (never use cookies). Default: auto",
+)
+@click.option(
+    "--cookie-retry-delay",
+    type=float,
+    default=None,
+    envvar="KIKUSAN_COOKIE_RETRY_DELAY",
+    help="Delay in seconds before retrying with cookies. Default: 1.0",
+)
+@click.option(
+    "--no-log-cookie-usage",
+    is_flag=True,
+    default=False,
+    help="Disable logging of cookie usage statistics",
+)
+@click.pass_context
+def main(ctx, cookie_mode: str | None, cookie_retry_delay: float | None, no_log_cookie_usage: bool):
     """Kikusan - Search and download music from YouTube Music."""
-    pass
+    # Store global options in context for subcommands to use
+    ctx.ensure_object(dict)
+
+    # Set environment variables from CLI flags (they override env vars)
+    if cookie_mode is not None:
+        os.environ["KIKUSAN_COOKIE_MODE"] = cookie_mode
+    if cookie_retry_delay is not None:
+        os.environ["KIKUSAN_COOKIE_RETRY_DELAY"] = str(cookie_retry_delay)
+    if no_log_cookie_usage:
+        os.environ["KIKUSAN_LOG_COOKIE_USAGE"] = "false"
 
 
 @main.command()
@@ -75,6 +106,18 @@ main.add_command(search_cmd, name="search")
     "playlist_name",
     help="Add downloaded track(s) to M3U playlist",
 )
+@click.option(
+    "--organization-mode",
+    type=click.Choice(["flat", "album"]),
+    default=None,
+    envvar="KIKUSAN_ORGANIZATION_MODE",
+    help="File organization: flat (all in one dir) or album (Artist/Year - Album/Track). Default: flat",
+)
+@click.option(
+    "--use-primary-artist/--no-use-primary-artist",
+    default=None,
+    help="Use only primary artist for folder names in album mode (strips 'feat.', etc.)",
+)
 def download_cmd(
     video_id: str | None,
     url: str | None,
@@ -84,6 +127,8 @@ def download_cmd(
     filename_template: str | None,
     no_lyrics: bool,
     playlist_name: str | None,
+    organization_mode: str | None,
+    use_primary_artist: bool | None,
 ):
     """Download a track by video ID, URL, or search query.
 
@@ -106,6 +151,8 @@ def download_cmd(
     output_dir = Path(output) if output else config.download_dir
     fmt = audio_format or config.audio_format
     template = filename_template or config.filename_template
+    org_mode = organization_mode if organization_mode is not None else config.organization_mode
+    primary_artist = use_primary_artist if use_primary_artist is not None else config.use_primary_artist
 
     try:
         # Search and download first match
@@ -123,8 +170,8 @@ def download_cmd(
                 audio_format=fmt,
                 filename_template=template,
                 fetch_lyrics=not no_lyrics,
-                organization_mode=config.organization_mode,
-                use_primary_artist=config.use_primary_artist,
+                organization_mode=org_mode,
+                use_primary_artist=primary_artist,
             )
             if audio_path:
                 click.echo(f"Downloaded: {audio_path}")
@@ -147,8 +194,8 @@ def download_cmd(
                     filename_template=template,
                     fetch_lyrics=not no_lyrics,
                     playlist_name=playlist_name,
-                    organization_mode=config.organization_mode,
-                    use_primary_artist=config.use_primary_artist,
+                    organization_mode=org_mode,
+                    use_primary_artist=primary_artist,
                 )
             else:
                 result = download_url(
@@ -157,8 +204,8 @@ def download_cmd(
                     audio_format=fmt,
                     filename_template=template,
                     fetch_lyrics=not no_lyrics,
-                    organization_mode=config.organization_mode,
-                    use_primary_artist=config.use_primary_artist,
+                    organization_mode=org_mode,
+                    use_primary_artist=primary_artist,
                 )
 
                 if isinstance(result, list):
@@ -186,8 +233,8 @@ def download_cmd(
             audio_format=fmt,
             filename_template=template,
             fetch_lyrics=not no_lyrics,
-            organization_mode=config.organization_mode,
-            use_primary_artist=config.use_primary_artist,
+            organization_mode=org_mode,
+            use_primary_artist=primary_artist,
         )
 
         if audio_path:
@@ -288,11 +335,52 @@ main.add_command(plugins, name="plugins")
 @main.command()
 @click.option("--host", default="0.0.0.0", help="Host to bind to")
 @click.option("--port", "-p", default=None, type=int, help="Port to listen on")
-def web(host: str, port: int | None):
+@click.option(
+    "--cors-origins",
+    default=None,
+    envvar="KIKUSAN_CORS_ORIGINS",
+    help="CORS allowed origins (comma-separated, or '*' for all). Default: *",
+)
+@click.option(
+    "--web-playlist",
+    default=None,
+    envvar="KIKUSAN_WEB_PLAYLIST",
+    help="M3U playlist name for web downloads (optional)",
+)
+@click.option(
+    "--organization-mode",
+    type=click.Choice(["flat", "album"]),
+    default=None,
+    envvar="KIKUSAN_ORGANIZATION_MODE",
+    help="File organization: flat (all in one dir) or album (Artist/Year - Album/Track). Default: flat",
+)
+@click.option(
+    "--use-primary-artist/--no-use-primary-artist",
+    default=None,
+    help="Use only primary artist for folder names in album mode (strips 'feat.', etc.)",
+)
+def web(
+    host: str,
+    port: int | None,
+    cors_origins: str | None,
+    web_playlist: str | None,
+    organization_mode: str | None,
+    use_primary_artist: bool | None,
+):
     """Start the web interface."""
     import uvicorn
 
     from kikusan.config import get_config
+
+    # Override env vars if CLI flags provided
+    if cors_origins is not None:
+        os.environ["KIKUSAN_CORS_ORIGINS"] = cors_origins
+    if web_playlist is not None:
+        os.environ["KIKUSAN_WEB_PLAYLIST"] = web_playlist
+    if organization_mode is not None:
+        os.environ["KIKUSAN_ORGANIZATION_MODE"] = organization_mode
+    if use_primary_artist is not None:
+        os.environ["KIKUSAN_USE_PRIMARY_ARTIST"] = "true" if use_primary_artist else "false"
 
     config = get_config()
     server_port = port or config.web_port
