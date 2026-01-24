@@ -1,5 +1,6 @@
 - [ ] Add cli flags to the subcommands (or global) for all config variables (like KIKUSAN_COOKIE_MODE, etc.) where it makes sense
 - [ ] Ensure every cli flag and env variable is documented in the README.md
 - [ ] Just like the query, the selected tab in web (song or album) should be in the url params too.
-- [ ] The text in the download progessbar in the web mode should be red like the buttons to match the theme.
+- [x] The text in the download progessbar in the web mode should be red like the buttons to match the theme.
 - [ ] The settings button doesnt match the style of the other buttons. Fix it.
+- [ ] Add a generic hook feature which allows users to (for example) automatically import the changed m3u to navidrome if it was changed (see https://github.com/navidrome/navidrome/pull/2273)

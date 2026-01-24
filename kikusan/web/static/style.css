@@ -803,7 +803,7 @@ header p {
     transform: translate(-50%, -50%);
     font-size: 0.85rem;
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--accent-primary);
     text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
     white-space: nowrap;
     z-index: 1;
