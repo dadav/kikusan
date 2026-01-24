@@ -1,5 +1,5 @@
 - [x] Add cli flags to the subcommands (or global) for all config variables (like KIKUSAN_COOKIE_MODE, etc.) where it makes sense
-- [ ] Ensure every cli flag and env variable is documented in the README.md
+- [x] Ensure every cli flag and env variable is documented in the README.md
 - [x] Just like the query, the selected tab in web (song or album) should be in the url params too.
 - [x] The text in the download progessbar in the web mode should be red like the buttons to match the theme.
 - [x] The download progessbar in the web mode should be red like the buttons to match the theme. The text color should be adjusted so its readable
