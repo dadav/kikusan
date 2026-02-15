@@ -916,7 +916,7 @@
           .map(
             (album) => `
                 <div class="album-card">
-                    <img class="album-cover" src="${album.thumbnail_url || ""}" alt="${escapeHtml(album.title)}" onerror="this.style.display='none'">
+                    <img class="album-cover" src="${proxyImageUrl(album.thumbnail_url)}" alt="${escapeHtml(album.title)}" onerror="this.style.display='none'">
                     <div class="album-info">
                         <div class="album-title">${escapeHtml(album.title)}</div>
                         <div class="album-artist">${escapeHtml(album.artist)}</div>
@@ -1039,7 +1039,7 @@
                     <div class="track-main">
                         <img
                             class="track-cover"
-                            src="${track.thumbnail_url || ""}"
+                            src="${proxyImageUrl(track.thumbnail_url)}"
                             alt=""
                             loading="lazy"
                         >
@@ -1668,7 +1668,7 @@
                             <div class="track chart-track">
                                 <span class="chart-rank">${track.rank || idx + 1}</span>
                                 <div class="track-main">
-                                    <img class="track-cover" src="${track.thumbnail_url || ""}" alt="" loading="lazy" onerror="this.style.display='none'">
+                                    <img class="track-cover" src="${proxyImageUrl(track.thumbnail_url)}" alt="" loading="lazy" onerror="this.style.display='none'">
                                     <div class="track-info">
                                         <div class="track-title">${escapeHtml(track.title)}${isUgcVideoType(track.video_type) ? '<span class="ugc-badge">UGC</span>' : ""}</div>
                                         <div class="track-artist">${escapeHtml(track.artist)}</div>
@@ -1841,7 +1841,7 @@
                       .map(
                         (pl) => `
                         <div class="mood-playlist-card" data-playlist-id="${escapeHtml(pl.playlist_id)}" data-title="${escapeHtml(pl.title)}">
-                            <img class="mood-playlist-thumb" src="${pl.thumbnail_url || ""}" alt="${escapeHtml(pl.title)}" loading="lazy" onerror="this.style.display='none'">
+                            <img class="mood-playlist-thumb" src="${proxyImageUrl(pl.thumbnail_url)}" alt="${escapeHtml(pl.title)}" loading="lazy" onerror="this.style.display='none'">
                             <div class="mood-playlist-info">
                                 <div class="mood-playlist-title">${escapeHtml(pl.title)}</div>
                                 ${pl.author ? `<div class="mood-playlist-author">${escapeHtml(pl.author)}</div>` : ""}
@@ -1999,7 +1999,7 @@
             (track) => `
                 <div class="track">
                     <div class="track-main">
-                        <img class="track-cover" src="${track.thumbnail_url || ""}" alt="" loading="lazy">
+                        <img class="track-cover" src="${proxyImageUrl(track.thumbnail_url)}" alt="" loading="lazy">
                         <div class="track-info">
                             <div class="track-title">${escapeHtml(track.title)}${isUgcVideoType(track.video_type) ? '<span class="ugc-badge">UGC</span>' : ""}</div>
                             <div class="track-artist">${escapeHtml(track.artist)}${track.album ? " - " + escapeHtml(track.album) : ""}</div>
@@ -2264,6 +2264,11 @@
         const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
+      }
+
+      function proxyImageUrl(url) {
+        if (!url) return "";
+        return "/api/image-proxy?url=" + encodeURIComponent(url);
       }
     </script>
   </body>

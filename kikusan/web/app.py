@@ -9,7 +9,7 @@ from pathlib import Path
 import yt_dlp
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -20,6 +20,7 @@ from kikusan.download import download
 from kikusan.playlist import add_to_m3u, read_m3u, remove_from_m3u
 from kikusan.queue import QueueManager
 from kikusan.search import search
+from kikusan.web.image_proxy import ImageProxyService, validate_image_url
 from kikusan.yt_dlp_wrapper import extract_info_with_retry
 
 app = FastAPI(title="Kikusan", description="Search and download music from YouTube Music")
@@ -36,6 +37,9 @@ app.add_middleware(
 
 # Global queue manager
 queue_manager: QueueManager | None = None
+
+# Global image proxy service
+_image_proxy: ImageProxyService | None = None
 
 # Setup templates and static files
 templates_dir = Path(__file__).parent / "templates"
@@ -60,17 +64,20 @@ def _get_remote_user(http_request: Request, config) -> str | None:
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize queue manager on startup."""
-    global queue_manager
+    """Initialize queue manager and image proxy on startup."""
+    global queue_manager, _image_proxy
     queue_manager = QueueManager()
     await queue_manager.start()
+    _image_proxy = ImageProxyService()
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Stop queue manager on shutdown."""
+    """Stop queue manager and image proxy on shutdown."""
     if queue_manager:
         await queue_manager.stop()
+    if _image_proxy:
+        await _image_proxy.close()
 
 
 class DownloadRequest(BaseModel):
@@ -1089,6 +1096,33 @@ async def api_explore_playlist_tracks(playlist_id: str):
     except Exception as e:
         logger.error("Failed to get playlist tracks: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get playlist tracks: {str(e)}")
+
+
+@app.get("/api/image-proxy")
+async def api_image_proxy(url: str = Query(..., description="Image URL to proxy")):
+    """Proxy and cache images from allowed hosts to prevent 429 errors."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    validated = validate_image_url(url)
+    if validated is None:
+        raise HTTPException(status_code=400, detail="URL not allowed")
+
+    if not _image_proxy:
+        raise HTTPException(status_code=500, detail="Image proxy not initialized")
+
+    try:
+        data, content_type = await _image_proxy.fetch(validated)
+    except Exception as e:
+        logger.warning("Image proxy fetch failed for '%s': %s", url, e)
+        raise HTTPException(status_code=502, detail="Failed to fetch image")
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # Cookie management endpoints
