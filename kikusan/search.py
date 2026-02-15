@@ -7,6 +7,32 @@ from ytmusicapi import YTMusic
 
 logger = logging.getLogger(__name__)
 
+# Video type constants from YouTube Music API
+VIDEO_TYPE_ATV = "MUSIC_VIDEO_TYPE_ATV"
+VIDEO_TYPE_OMV = "MUSIC_VIDEO_TYPE_OMV"
+VIDEO_TYPE_UGC = "MUSIC_VIDEO_TYPE_UGC"
+VIDEO_TYPE_OFFICIAL_SOURCE = "MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC"
+ALLOWED_VIDEO_TYPES = frozenset({VIDEO_TYPE_ATV, VIDEO_TYPE_OMV})
+
+
+def is_allowed_video_type(video_type: str | None, allow_ugc: bool = False) -> bool:
+    """Check if a video type should be included in results.
+
+    Args:
+        video_type: The videoType string from YouTube Music API, or None if unknown.
+        allow_ugc: If True, also allow UGC and OFFICIAL_SOURCE_MUSIC types.
+
+    Returns:
+        True if the video type is allowed.
+    """
+    if video_type is None:
+        return False
+    if video_type in ALLOWED_VIDEO_TYPES:
+        return True
+    if allow_ugc and video_type in (VIDEO_TYPE_UGC, VIDEO_TYPE_OFFICIAL_SOURCE):
+        return True
+    return False
+
 
 @dataclass
 class Track:
@@ -20,6 +46,7 @@ class Track:
     duration_seconds: int
     thumbnail_url: str | None
     view_count: str | None
+    video_type: str | None = None
 
     @property
     def duration_display(self) -> str:
@@ -81,6 +108,7 @@ class ChartTrack:
     trend: str | None
     view_count: str | None = None
     duration_seconds: int = 0
+    video_type: str | None = None
 
     @property
     def duration_display(self) -> str:
@@ -507,7 +535,7 @@ def _get_mood_playlists_fallback(yt: YTMusic, params: str) -> list[dict]:
     return playlists
 
 
-def get_charts(country: str = "ZZ") -> Charts:
+def get_charts(country: str = "ZZ", allow_ugc: bool = False) -> Charts:
     """Fetch chart data (top songs, artists) for a country.
 
     ytmusicapi get_charts returns:
@@ -554,6 +582,19 @@ def get_charts(country: str = "ZZ") -> Charts:
                     video_id = item.get("videoId", "")
                     if not video_id:
                         continue
+
+                    video_type = item.get("videoType")
+
+                    # Filter by video type when available
+                    if video_type is not None and not is_allowed_video_type(video_type, allow_ugc):
+                        logger.debug(
+                            "Skipping chart track '%s' (%s): video_type=%s",
+                            item.get("title", "?"),
+                            video_id,
+                            video_type,
+                        )
+                        continue
+
                     artist_objects = item.get("artists", [])
                     artist_names = [a["name"] for a in artist_objects] if artist_objects else ["Unknown Artist"]
                     thumbnails = item.get("thumbnails", [])
@@ -578,6 +619,7 @@ def get_charts(country: str = "ZZ") -> Charts:
                             trend=None,
                             view_count=view_count,
                             duration_seconds=duration_seconds,
+                            video_type=video_type,
                         )
                     )
                 break  # Successfully fetched tracks, stop trying other playlists
@@ -604,7 +646,7 @@ def get_charts(country: str = "ZZ") -> Charts:
     return Charts(country=country, tracks=tracks, artists=artists)
 
 
-def get_playlist_tracks(playlist_id: str) -> list[Track]:
+def get_playlist_tracks(playlist_id: str, allow_ugc: bool = False) -> list[Track]:
     """Get tracks from a YouTube Music playlist.
 
     Radio playlists (IDs starting with 'RDAM') are not supported because they
@@ -612,6 +654,8 @@ def get_playlist_tracks(playlist_id: str) -> list[Track]:
 
     Args:
         playlist_id: YouTube Music playlist ID
+        allow_ugc: If True, include UGC and OFFICIAL_SOURCE_MUSIC tracks.
+            By default, only ATV and OMV tracks are included.
 
     Returns:
         List of Track objects from the playlist.
@@ -637,9 +681,23 @@ def get_playlist_tracks(playlist_id: str) -> list[Track]:
         ) from e
 
     tracks = []
+    skipped_count = 0
     for item in raw.get("tracks", []):
         video_id = item.get("videoId")
         if not video_id:
+            continue
+
+        video_type = item.get("videoType")
+
+        # Filter by video type when available
+        if video_type is not None and not is_allowed_video_type(video_type, allow_ugc):
+            logger.debug(
+                "Skipping track '%s' (%s): video_type=%s",
+                item.get("title", "?"),
+                video_id,
+                video_type,
+            )
+            skipped_count += 1
             continue
 
         artist_objects = item.get("artists", [])
@@ -665,9 +723,16 @@ def get_playlist_tracks(playlist_id: str) -> list[Track]:
                 duration_seconds=duration_seconds,
                 thumbnail_url=thumbnail_url,
                 view_count=None,
+                video_type=video_type,
             )
         )
 
+    if skipped_count:
+        logger.info(
+            "Filtered %d non-official tracks from playlist: %s",
+            skipped_count,
+            raw.get("title", playlist_id),
+        )
     logger.info("Found %d tracks in playlist: %s", len(tracks), raw.get("title", playlist_id))
     return tracks
 
@@ -961,6 +1026,9 @@ def get_track_from_video_id(video_id: str) -> Track:
     view_count_raw = video_details.get("viewCount")
     view_count = _format_view_count(int(view_count_raw)) if view_count_raw else None
 
+    # Extract video type (musicVideoType in videoDetails)
+    video_type = video_details.get("musicVideoType")
+
     logger.info("Fetched track from URL: %s - %s", artist, title)
 
     return Track(
@@ -972,4 +1040,5 @@ def get_track_from_video_id(video_id: str) -> Track:
         duration_seconds=length_seconds,
         thumbnail_url=thumbnail_url,
         view_count=view_count,
+        video_type=video_type,
     )

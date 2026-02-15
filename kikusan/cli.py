@@ -138,6 +138,11 @@ main.add_command(search_cmd, name="search")
     default=None,
     help="Apply ReplayGain/R128 loudness normalization tags (requires rsgain)",
 )
+@click.option(
+    "--allow-ugc/--no-allow-ugc",
+    default=None,
+    help="Include UGC (user-generated content) tracks in playlist/chart results. Default: exclude",
+)
 def download_cmd(
     video_id: str | None,
     url: str | None,
@@ -150,6 +155,7 @@ def download_cmd(
     organization_mode: str | None,
     use_primary_artist: bool | None,
     replaygain: bool | None,
+    allow_ugc: bool | None,
 ):
     """Download a track by video ID, URL, or search query.
 
@@ -170,6 +176,8 @@ def download_cmd(
 
     if replaygain is not None:
         os.environ["KIKUSAN_REPLAYGAIN"] = "true" if replaygain else "false"
+    if allow_ugc is not None:
+        os.environ["KIKUSAN_ALLOW_UGC"] = "true" if allow_ugc else "false"
 
     config = get_config()
     output_dir = Path(output) if output else config.download_dir
@@ -451,12 +459,22 @@ def explore_moods():
     help="Audio format (default: opus)",
 )
 @click.option("--add-to-playlist", "-p", "playlist_name", help="Add downloaded tracks to M3U playlist")
-def explore_mood_playlists_cmd(params: str, do_download: bool, output: str | None, audio_format: str | None, playlist_name: str | None):
+@click.option(
+    "--allow-ugc/--no-allow-ugc",
+    default=None,
+    help="Include UGC (user-generated content) tracks. Default: exclude",
+)
+def explore_mood_playlists_cmd(params: str, do_download: bool, output: str | None, audio_format: str | None, playlist_name: str | None, allow_ugc: bool | None):
     """List playlists for a mood/genre category.
 
     PARAMS is the category identifier from 'explore moods'.
     Use --download to download all tracks from the playlists.
     """
+    if allow_ugc is not None:
+        os.environ["KIKUSAN_ALLOW_UGC"] = "true" if allow_ugc else "false"
+
+    config = get_config()
+
     try:
         playlists = get_mood_playlists(params)
     except Exception as e:
@@ -475,7 +493,7 @@ def explore_mood_playlists_cmd(params: str, do_download: bool, output: str | Non
         for pl in playlists:
             click.echo(f"\nFetching tracks from: {pl.title}")
             try:
-                tracks = get_playlist_tracks(pl.playlist_id)
+                tracks = get_playlist_tracks(pl.playlist_id, allow_ugc=config.allow_ugc)
             except Exception as e:
                 click.echo(f"  Failed to fetch tracks: {e}")
                 continue
@@ -493,13 +511,23 @@ def explore_mood_playlists_cmd(params: str, do_download: bool, output: str | Non
     help="Audio format (default: opus)",
 )
 @click.option("--add-to-playlist", "-p", "playlist_name", help="Add downloaded tracks to M3U playlist")
-def explore_charts_cmd(country: str, do_download: bool, output: str | None, audio_format: str | None, playlist_name: str | None):
+@click.option(
+    "--allow-ugc/--no-allow-ugc",
+    default=None,
+    help="Include UGC (user-generated content) tracks. Default: exclude",
+)
+def explore_charts_cmd(country: str, do_download: bool, output: str | None, audio_format: str | None, playlist_name: str | None, allow_ugc: bool | None):
     """Show current music charts.
 
     Use --download to download all chart tracks.
     """
+    if allow_ugc is not None:
+        os.environ["KIKUSAN_ALLOW_UGC"] = "true" if allow_ugc else "false"
+
+    config = get_config()
+
     try:
-        charts = get_charts(country)
+        charts = get_charts(country, allow_ugc=config.allow_ugc)
     except Exception as e:
         raise click.ClickException(str(e))
 
@@ -630,6 +658,11 @@ def _download_explore_tracks(
     default=None,
     help="Apply ReplayGain/R128 loudness normalization tags (requires rsgain)",
 )
+@click.option(
+    "--allow-ugc/--no-allow-ugc",
+    default=None,
+    help="Include UGC (user-generated content) tracks in playlist/chart results. Default: exclude",
+)
 def web(
     host: str,
     port: int | None,
@@ -639,6 +672,7 @@ def web(
     use_primary_artist: bool | None,
     multi_user: bool | None,
     replaygain: bool | None,
+    allow_ugc: bool | None,
 ):
     """Start the web interface."""
     import uvicorn
@@ -658,6 +692,8 @@ def web(
         os.environ["KIKUSAN_MULTI_USER"] = "true" if multi_user else "false"
     if replaygain is not None:
         os.environ["KIKUSAN_REPLAYGAIN"] = "true" if replaygain else "false"
+    if allow_ugc is not None:
+        os.environ["KIKUSAN_ALLOW_UGC"] = "true" if allow_ugc else "false"
 
     config = get_config()
     server_port = port or config.web_port

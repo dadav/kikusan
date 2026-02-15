@@ -103,6 +103,7 @@ class TrackResponse(BaseModel):
     duration: str
     thumbnail_url: str | None
     view_count: str | None
+    video_type: str | None = None
 
 
 def _track_to_response(track) -> TrackResponse:
@@ -116,6 +117,7 @@ def _track_to_response(track) -> TrackResponse:
         duration=track.duration_display,
         thumbnail_url=track.thumbnail_url,
         view_count=track.view_count,
+        video_type=getattr(track, "video_type", None),
     )
 
 
@@ -195,6 +197,7 @@ class ChartTrackResponse(BaseModel):
     trend: str | None
     view_count: str | None = None
     duration: str | None = None
+    video_type: str | None = None
 
 class ChartArtistResponse(BaseModel):
     """A chart artist."""
@@ -282,7 +285,8 @@ async def api_search(q: str = Query(..., min_length=1, description="Search query
                     results = [track]
                 elif url_info['type'] == 'playlist':
                     # All tracks from playlist (no limit)
-                    results = get_playlist_tracks(url_info['id'])
+                    # Pass allow_ugc=True so web UI can show all tracks with UGC badge
+                    results = get_playlist_tracks(url_info['id'], allow_ugc=True)
                     if not results:
                         raise HTTPException(
                             status_code=404,
@@ -327,19 +331,7 @@ async def api_search(q: str = Query(..., min_length=1, description="Search query
 
     return SearchResponse(
         query=q,
-        results=[
-            TrackResponse(
-                video_id=track.video_id,
-                title=track.title,
-                artist=track.artist,
-                artists=track.artists,
-                album=track.album,
-                duration=track.duration_display,
-                thumbnail_url=track.thumbnail_url,
-                view_count=track.view_count,
-            )
-            for track in results
-        ],
+        results=[_track_to_response(track) for track in results],
     )
 
 
@@ -487,7 +479,8 @@ async def api_search_playlist_stream(
             )
 
             try:
-                tracks = await asyncio.to_thread(get_playlist_tracks, url_info["id"])
+                # Pass allow_ugc=True so web UI can show all tracks with UGC badge
+                tracks = await asyncio.to_thread(get_playlist_tracks, url_info["id"], True)
             except ValueError as e:
                 yield _sse_event("failure", {"message": str(e)})
                 return
@@ -578,19 +571,7 @@ async def api_get_album_tracks(browse_id: str):
         return AlbumTracksResponse(
             browse_id=browse_id,
             album_title=tracks[0].album if tracks else "Unknown Album",
-            tracks=[
-                TrackResponse(
-                    video_id=track.video_id,
-                    title=track.title,
-                    artist=track.artist,
-                    artists=track.artists,
-                    album=track.album,
-                    duration=track.duration_display,
-                    thumbnail_url=track.thumbnail_url,
-                    view_count=track.view_count,
-                )
-                for track in tracks
-            ],
+            tracks=[_track_to_response(track) for track in tracks],
         )
     except HTTPException:
         raise
@@ -1052,7 +1033,8 @@ async def api_explore_charts(country: str = Query("ZZ", description="ISO 3166-1 
         )
 
     try:
-        charts = get_charts(country)
+        # Pass allow_ugc=True so web UI can show all tracks with UGC badge
+        charts = get_charts(country, allow_ugc=True)
         return ChartsResponse(
             country=charts.country,
             tracks=[
@@ -1067,6 +1049,7 @@ async def api_explore_charts(country: str = Query("ZZ", description="ISO 3166-1 
                     trend=t.trend,
                     view_count=t.view_count,
                     duration=t.duration_display,
+                    video_type=t.video_type,
                 )
                 for t in charts.tracks
             ],
@@ -1094,22 +1077,11 @@ async def api_explore_playlist_tracks(playlist_id: str):
     logger = logging.getLogger(__name__)
 
     try:
-        tracks = get_playlist_tracks(playlist_id)
+        # Pass allow_ugc=True so web UI can show all tracks with UGC badge
+        tracks = get_playlist_tracks(playlist_id, allow_ugc=True)
         return {
             "playlist_id": playlist_id,
-            "tracks": [
-                TrackResponse(
-                    video_id=track.video_id,
-                    title=track.title,
-                    artist=track.artist,
-                    artists=track.artists,
-                    album=track.album,
-                    duration=track.duration_display,
-                    thumbnail_url=track.thumbnail_url,
-                    view_count=track.view_count,
-                )
-                for track in tracks
-            ],
+            "tracks": [_track_to_response(track) for track in tracks],
         }
     except ValueError as e:
         logger.warning("Playlist unavailable: %s", e)

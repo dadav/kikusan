@@ -94,6 +94,26 @@ Kikusan is a tool to search and download music from youtube music. It must use y
 - `_truncate_to_bytes()` handles UTF-8 safely (never splits multi-byte characters)
 - The constant `MAX_FILENAME_BYTES` is defined in `kikusan/config.py`
 
+### Video Type Filtering
+
+- YouTube Music categorizes content by video type:
+  - **ATV** (`MUSIC_VIDEO_TYPE_ATV`): Audio Track Video - high quality audio, uploaded by artist
+  - **OMV** (`MUSIC_VIDEO_TYPE_OMV`): Official Music Video - actual video from artist
+  - **OFFICIAL_SOURCE_MUSIC** (`MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC`): Official but not single track (compilations)
+  - **UGC** (`MUSIC_VIDEO_TYPE_UGC`): User Generated Content
+- Default: Only ATV + OMV tracks are included in playlist and chart results
+- Opt-in for UGC: `KIKUSAN_ALLOW_UGC=true` env var or `--allow-ugc` CLI flag
+- Filtering applies in contexts where `videoType` is available: `get_playlist_tracks()`, `get_charts()`
+- NOT filtered in contexts where `videoType` is structurally absent: text search (`filter="songs"`), album tracks, yt-dlp flat extract
+- Tracks without a `videoType` field (null) pass through unfiltered
+- Explicit single video downloads by ID/URL always work regardless of type
+- Implementation: `is_allowed_video_type()` helper and `ALLOWED_VIDEO_TYPES` frozenset in `kikusan/search.py`
+- `Track` and `ChartTrack` dataclasses have `video_type: str | None = None` field
+- Web UI: All tracks shown (pass `allow_ugc=True`), UGC/OFFICIAL_SOURCE tracks display a "UGC" badge via `isUgcVideoType()` JS helper and `.ugc-badge` CSS class
+- `TrackResponse` and `ChartTrackResponse` include `video_type: str | None = None` field
+- Cron explore sync reads `allow_ugc` from config and passes to `get_charts()`/`get_playlist_tracks()`
+- Test coverage: `tests/test_video_type.py`
+
 ### Unavailable Video Cooldown
 
 - When a video returns "Video unavailable" during download, the video ID is recorded with a timestamp
@@ -250,6 +270,7 @@ All major configuration variables have corresponding CLI flags:
 - `--organization-mode`: File organization (flat, album)
 - `--use-primary-artist / --no-use-primary-artist`: Use primary artist for folder names
 - `--replaygain / --no-replaygain`: Apply ReplayGain/R128 loudness normalization tags (env: `KIKUSAN_REPLAYGAIN`)
+- `--allow-ugc / --no-allow-ugc`: Include UGC tracks in playlist/chart results (env: `KIKUSAN_ALLOW_UGC`)
 
 **web command:**
 
@@ -257,6 +278,7 @@ All major configuration variables have corresponding CLI flags:
 - `--web-playlist`: M3U playlist name for web downloads
 - `--multi-user / --no-multi-user`: Enable per-user M3U playlists via Remote-User header (env: `KIKUSAN_MULTI_USER`)
 - `--replaygain / --no-replaygain`: Apply ReplayGain/R128 loudness normalization tags (env: `KIKUSAN_REPLAYGAIN`)
+- `--allow-ugc / --no-allow-ugc`: Include UGC tracks in playlist/chart results (env: `KIKUSAN_ALLOW_UGC`)
 
 **cron command:**
 
@@ -294,11 +316,13 @@ All major configuration variables have corresponding CLI flags:
   - `--output/-o`: Output directory
   - `--format/-f`: Audio format (opus, mp3, flac)
   - `--add-to-playlist/-p`: Add to M3U playlist
+  - `--allow-ugc/--no-allow-ugc`: Include UGC tracks (default: exclude)
 - `explore charts` — show current music charts
   - `--country/-c <CODE>`: ISO 3166-1 Alpha-2 country code (default: ZZ for global)
   - `--download/-d`: Download all chart tracks
   - `--output/-o`: Output directory
   - `--format/-f`: Audio format (opus, mp3, flac)
   - `--add-to-playlist/-p`: Add to M3U playlist
+  - `--allow-ugc/--no-allow-ugc`: Include UGC tracks (default: exclude)
 
 CLI flags take precedence over environment variables. Options with `envvar` attribute automatically read from the corresponding environment variable if not specified on the command line.

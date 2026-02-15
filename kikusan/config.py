@@ -37,6 +37,7 @@ class Config:
     unavailable_cooldown_hours: int = 168  # 7 days
     multi_user: bool = False
     replaygain: bool = False
+    allow_ugc: bool = False
 
     def effective_playlist_name(self, remote_user: str | None) -> str | None:
         """Return the playlist name, optionally prefixed with the remote user."""
@@ -105,6 +106,9 @@ class Config:
         # Parse replaygain flag
         replaygain = os.getenv("KIKUSAN_REPLAYGAIN", "false").lower() in ("true", "1", "yes")
 
+        # Parse allow_ugc flag
+        allow_ugc = os.getenv("KIKUSAN_ALLOW_UGC", "false").lower() in ("true", "1", "yes")
+
         # Parse web port
         web_port = int(os.getenv("KIKUSAN_WEB_PORT", "8000"))
         if not (1 <= web_port <= 65535):
@@ -130,6 +134,7 @@ class Config:
             unavailable_cooldown_hours=unavailable_cooldown_hours,
             multi_user=multi_user,
             replaygain=replaygain,
+            allow_ugc=allow_ugc,
         )
 
     @property

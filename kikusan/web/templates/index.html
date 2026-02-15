@@ -1044,7 +1044,7 @@
                             loading="lazy"
                         >
                         <div class="track-info">
-                            <div class="track-title">${escapeHtml(track.title)}</div>
+                            <div class="track-title">${escapeHtml(track.title)}${isUgcVideoType(track.video_type) ? '<span class="ugc-badge">UGC</span>' : ""}</div>
                             <div class="track-artist">${escapeHtml(track.artist)}${track.album ? " - " + escapeHtml(track.album) : ""}</div>
                             <div class="track-meta">
                                 <span class="track-duration">${track.duration}</span>
@@ -1670,7 +1670,7 @@
                                 <div class="track-main">
                                     <img class="track-cover" src="${track.thumbnail_url || ""}" alt="" loading="lazy" onerror="this.style.display='none'">
                                     <div class="track-info">
-                                        <div class="track-title">${escapeHtml(track.title)}</div>
+                                        <div class="track-title">${escapeHtml(track.title)}${isUgcVideoType(track.video_type) ? '<span class="ugc-badge">UGC</span>' : ""}</div>
                                         <div class="track-artist">${escapeHtml(track.artist)}</div>
                                         <div class="track-meta">
                                             ${track.duration ? `<span class="track-duration">${track.duration}</span>` : ""}
@@ -2001,7 +2001,7 @@
                     <div class="track-main">
                         <img class="track-cover" src="${track.thumbnail_url || ""}" alt="" loading="lazy">
                         <div class="track-info">
-                            <div class="track-title">${escapeHtml(track.title)}</div>
+                            <div class="track-title">${escapeHtml(track.title)}${isUgcVideoType(track.video_type) ? '<span class="ugc-badge">UGC</span>' : ""}</div>
                             <div class="track-artist">${escapeHtml(track.artist)}${track.album ? " - " + escapeHtml(track.album) : ""}</div>
                             <div class="track-meta">
                                 <span class="track-duration">${track.duration}</span>
@@ -2254,6 +2254,10 @@
             btn.textContent = "Remove";
           }, 3000);
         }
+      }
+
+      function isUgcVideoType(videoType) {
+        return videoType === "MUSIC_VIDEO_TYPE_UGC" || videoType === "MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC";
       }
 
       function escapeHtml(text) {

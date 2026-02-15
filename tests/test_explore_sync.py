@@ -53,7 +53,7 @@ class TestFetchChartTracks:
         assert len(tracks) == 2
         assert tracks[0] == ("abc123", "Hit Song", "Artist A")
         assert tracks[1] == ("def456", "Another Hit", "Artist B")
-        mock_get_charts.assert_called_once_with("US")
+        mock_get_charts.assert_called_once_with("US", allow_ugc=False)
 
     @patch("kikusan.cron.explore_sync.get_charts")
     def test_skips_empty_video_ids(self, mock_get_charts):
@@ -195,8 +195,12 @@ class TestFetchMoodTracks:
 class TestFetchExploreTracks:
     """Test fetch_explore_tracks() routing."""
 
+    @patch("kikusan.cron.explore_sync.get_config")
     @patch("kikusan.cron.explore_sync._fetch_chart_tracks")
-    def test_routes_to_charts(self, mock_fetch_charts):
+    def test_routes_to_charts(self, mock_fetch_charts, mock_get_config):
+        mock_config_obj = MagicMock()
+        mock_config_obj.allow_ugc = False
+        mock_get_config.return_value = mock_config_obj
         mock_fetch_charts.return_value = [("vid1", "Song", "Artist")]
 
         config = ExploreConfig(
@@ -206,10 +210,14 @@ class TestFetchExploreTracks:
 
         tracks = fetch_explore_tracks(config)
         assert tracks == [("vid1", "Song", "Artist")]
-        mock_fetch_charts.assert_called_once_with("US")
+        mock_fetch_charts.assert_called_once_with("US", allow_ugc=False)
 
+    @patch("kikusan.cron.explore_sync.get_config")
     @patch("kikusan.cron.explore_sync._fetch_mood_tracks")
-    def test_routes_to_mood(self, mock_fetch_mood):
+    def test_routes_to_mood(self, mock_fetch_mood, mock_get_config):
+        mock_config_obj = MagicMock()
+        mock_config_obj.allow_ugc = False
+        mock_get_config.return_value = mock_config_obj
         mock_fetch_mood.return_value = [("vid1", "Song", "Artist")]
 
         config = ExploreConfig(
@@ -219,10 +227,14 @@ class TestFetchExploreTracks:
 
         tracks = fetch_explore_tracks(config)
         assert tracks == [("vid1", "Song", "Artist")]
-        mock_fetch_mood.assert_called_once_with("ggMPOg1uX1J", "")
+        mock_fetch_mood.assert_called_once_with("ggMPOg1uX1J", "", allow_ugc=False)
 
+    @patch("kikusan.cron.explore_sync.get_config")
     @patch("kikusan.cron.explore_sync._fetch_mood_tracks")
-    def test_routes_to_mood_with_playlist_id(self, mock_fetch_mood):
+    def test_routes_to_mood_with_playlist_id(self, mock_fetch_mood, mock_get_config):
+        mock_config = MagicMock()
+        mock_config.allow_ugc = False
+        mock_get_config.return_value = mock_config
         mock_fetch_mood.return_value = [("vid1", "Song", "Artist")]
 
         config = ExploreConfig(
@@ -233,7 +245,7 @@ class TestFetchExploreTracks:
 
         tracks = fetch_explore_tracks(config)
         assert tracks == [("vid1", "Song", "Artist")]
-        mock_fetch_mood.assert_called_once_with("ggMPOg1uX1J", "RDCLAK5uy_test123")
+        mock_fetch_mood.assert_called_once_with("ggMPOg1uX1J", "RDCLAK5uy_test123", allow_ugc=False)
 
     def test_unknown_type_returns_empty(self):
         config = ExploreConfig(

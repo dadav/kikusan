@@ -151,26 +151,28 @@ def fetch_explore_tracks(explore_config: ExploreConfig) -> list[tuple[str, str, 
     Returns:
         List of tuples: (video_id, title, artist)
     """
+    config = get_config()
     if explore_config.type == "charts":
-        return _fetch_chart_tracks(explore_config.country)
+        return _fetch_chart_tracks(explore_config.country, allow_ugc=config.allow_ugc)
     elif explore_config.type == "mood":
-        return _fetch_mood_tracks(explore_config.params, explore_config.playlist_id)
+        return _fetch_mood_tracks(explore_config.params, explore_config.playlist_id, allow_ugc=config.allow_ugc)
     else:
         logger.error("Unknown explore type: %s", explore_config.type)
         return []
 
 
-def _fetch_chart_tracks(country: str) -> list[tuple[str, str, str]]:
+def _fetch_chart_tracks(country: str, allow_ugc: bool = False) -> list[tuple[str, str, str]]:
     """Fetch tracks from YouTube Music charts.
 
     Args:
         country: ISO 3166-1 Alpha-2 country code
+        allow_ugc: If True, include UGC and OFFICIAL_SOURCE_MUSIC tracks.
 
     Returns:
         List of tuples: (video_id, title, artist)
     """
     try:
-        charts = get_charts(country)
+        charts = get_charts(country, allow_ugc=allow_ugc)
         tracks = []
         for chart_track in charts.tracks:
             if chart_track.video_id:
@@ -182,7 +184,7 @@ def _fetch_chart_tracks(country: str) -> list[tuple[str, str, str]]:
         return []
 
 
-def _fetch_mood_tracks(params: str, playlist_id: str = "") -> list[tuple[str, str, str]]:
+def _fetch_mood_tracks(params: str, playlist_id: str = "", allow_ugc: bool = False) -> list[tuple[str, str, str]]:
     """Fetch tracks from a mood/genre category.
 
     If playlist_id is provided, fetches tracks only from that specific playlist.
@@ -191,6 +193,7 @@ def _fetch_mood_tracks(params: str, playlist_id: str = "") -> list[tuple[str, st
     Args:
         params: Mood/genre category params string
         playlist_id: Optional specific playlist ID to fetch from
+        allow_ugc: If True, include UGC and OFFICIAL_SOURCE_MUSIC tracks.
 
     Returns:
         List of tuples: (video_id, title, artist)
@@ -200,7 +203,7 @@ def _fetch_mood_tracks(params: str, playlist_id: str = "") -> list[tuple[str, st
         if playlist_id:
             logger.info("Fetching tracks from specific playlist: %s", playlist_id)
             try:
-                playlist_tracks = get_playlist_tracks(playlist_id)
+                playlist_tracks = get_playlist_tracks(playlist_id, allow_ugc=allow_ugc)
                 tracks = [
                     (track.video_id, track.title, track.artist)
                     for track in playlist_tracks
@@ -225,7 +228,7 @@ def _fetch_mood_tracks(params: str, playlist_id: str = "") -> list[tuple[str, st
 
         for playlist in playlists:
             try:
-                playlist_tracks = get_playlist_tracks(playlist.playlist_id)
+                playlist_tracks = get_playlist_tracks(playlist.playlist_id, allow_ugc=allow_ugc)
                 for track in playlist_tracks:
                     if track.video_id and track.video_id not in seen_ids:
                         seen_ids.add(track.video_id)
